@@ -1,0 +1,374 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Zimnat Insurance — Adjuster Panel</title>
+{% load static %}
+<link rel="stylesheet" href="{% static 'shared.css' %}"/>
+<style>
+  .panel-grid { display: grid; grid-template-columns: 1fr 380px; gap: 22px; align-items: start; }
+
+  .claim-row {
+    display: flex; align-items: center; gap: 14px;
+    padding: 14px 16px;
+    border-radius: 10px;
+    border: 1.5px solid var(--gray-200);
+    margin-bottom: 10px;
+    cursor: pointer;
+    transition: all 0.2s;
+    background: white;
+  }
+  .claim-row:hover { border-color: var(--green-main); background: var(--green-pale); }
+  .claim-row.selected { border-color: var(--green-main); background: var(--green-pale); box-shadow: 0 0 0 3px rgba(26,122,74,0.1); }
+
+  .cr-icon { width: 40px; height: 40px; border-radius: 9px; background: var(--green-pale); display: flex; align-items: center; justify-content: center; font-size: 18px; flex-shrink: 0; }
+  .cr-info { flex: 1; }
+  .cr-num { font-size: 14px; font-weight: 700; color: var(--green-dark); }
+  .cr-meta { font-size: 12px; color: var(--gray-400); margin-top: 1px; }
+  .cr-right { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; flex-shrink: 0; }
+  .cr-amount { font-size: 13px; font-weight: 600; color: var(--gray-800); }
+  .cr-days { font-size: 11px; color: var(--gray-400); }
+
+  /* DETAIL PANEL */
+  .detail-panel {
+    background: white;
+    border-radius: var(--radius);
+    border: 1px solid var(--gray-200);
+    box-shadow: var(--shadow-sm);
+    position: sticky;
+    top: calc(var(--topbar-h) + 24px);
+    max-height: calc(100vh - var(--topbar-h) - 48px);
+    overflow-y: auto;
+  }
+
+  .dp-header {
+    padding: 20px;
+    background: linear-gradient(135deg, var(--green-dark), var(--green-main));
+    color: white;
+    border-radius: var(--radius) var(--radius) 0 0;
+  }
+  .dp-claim-num { font-family: 'Playfair Display', serif; font-size: 18px; }
+  .dp-client { font-size: 13px; opacity: 0.8; margin-top: 3px; }
+
+  .dp-body { padding: 20px; }
+  .dp-section { margin-bottom: 20px; padding-bottom: 20px; border-bottom: 1px solid var(--gray-100); }
+  .dp-section:last-child { border-bottom: none; margin-bottom: 0; padding-bottom: 0; }
+  .dp-section-title { font-size: 11px; font-weight: 700; color: var(--gray-400); text-transform: uppercase; letter-spacing: 0.8px; margin-bottom: 12px; }
+
+  .dp-row { display: flex; justify-content: space-between; margin-bottom: 8px; }
+  .dp-key { font-size: 12px; color: var(--gray-400); }
+  .dp-val { font-size: 12px; font-weight: 600; color: var(--gray-800); text-align: right; max-width: 55%; }
+
+  .decision-form { background: var(--gray-50); border-radius: 10px; padding: 16px; margin-top: 16px; }
+  .decision-form .df-title { font-size: 13px; font-weight: 700; color: var(--green-dark); margin-bottom: 12px; }
+
+  .decision-tabs { display: flex; gap: 8px; margin-bottom: 14px; }
+  .dt-btn {
+    flex: 1; padding: 9px;
+    border-radius: 8px; border: 1.5px solid var(--gray-200);
+    background: white; cursor: pointer;
+    font-family: 'DM Sans', sans-serif;
+    font-size: 13px; font-weight: 600;
+    transition: all 0.2s; color: var(--gray-600);
+  }
+  .dt-btn.approve { border-color: var(--green-border); }
+  .dt-btn.approve:hover, .dt-btn.approve.active { background: var(--green-main); border-color: var(--green-main); color: white; }
+  .dt-btn.decline { border-color: #fecaca; }
+  .dt-btn.decline:hover, .dt-btn.decline.active { background: #ef4444; border-color: #ef4444; color: white; }
+
+  .approve-fields, .decline-fields { display: none; }
+  .approve-fields.show, .decline-fields.show { display: block; animation: fadeIn 0.25s ease; }
+
+  .assessment-section { background: var(--green-pale); border-radius: 10px; padding: 14px; margin-bottom: 14px; }
+  .cost-row { display: flex; justify-content: space-between; padding: 5px 0; font-size: 13px; border-bottom: 1px solid var(--green-border); }
+  .cost-row:last-child { border-bottom: none; font-weight: 700; color: var(--green-dark); }
+
+  .fraud-indicator {
+    display: flex; align-items: center; gap: 8px;
+    padding: 10px 14px; border-radius: 8px;
+    font-size: 12px; font-weight: 600;
+  }
+  .fraud-low  { background: var(--green-pale); color: var(--green-dark); }
+  .fraud-med  { background: var(--yellow-light); color: #92400e; }
+  .fraud-high { background: #fef2f2; color: #dc2626; }
+
+  .tab-bar { display: flex; gap: 4px; background: var(--gray-100); border-radius: 10px; padding: 4px; margin-bottom: 18px; }
+  .tab-btn { flex: 1; padding: 8px; border: none; background: transparent; border-radius: 7px; font-family: 'DM Sans', sans-serif; font-size: 13px; font-weight: 500; cursor: pointer; color: var(--gray-600); transition: all 0.2s; }
+  .tab-btn.active { background: white; color: var(--green-dark); font-weight: 600; box-shadow: var(--shadow-sm); }
+
+  @keyframes fadeIn { from{opacity:0;transform:translateY(4px)} to{opacity:1;transform:translateY(0)} }
+</style>
+</head>
+<body>
+<div class="main-content">
+  <div class="page-content">
+
+    <!-- STATS ROW -->
+    <div class="stats-grid" id="adj-stats" style="margin-bottom:24px">
+      <div class="stat-card yellow"><div class="stat-icon">⏳</div><div class="stat-value" id="s-pending">—</div><div class="stat-label">Pending Review</div></div>
+      <div class="stat-card green"><div class="stat-icon">✅</div><div class="stat-value" id="s-approved">—</div><div class="stat-label">Approved Today</div></div>
+      <div class="stat-card red"><div class="stat-icon">❌</div><div class="stat-value" id="s-declined">—</div><div class="stat-label">Declined</div></div>
+      <div class="stat-card blue"><div class="stat-icon">💰</div><div class="stat-value" id="s-total">—</div><div class="stat-label">Total Claims</div></div>
+    </div>
+
+    <!-- TAB BAR -->
+    <div class="tab-bar">
+      <button class="tab-btn active" onclick="filterTab('ALL', this)">All Claims</button>
+      <button class="tab-btn" onclick="filterTab('SUBMITTED', this)">New ⚡</button>
+      <button class="tab-btn" onclick="filterTab('UNDER_REVIEW', this)">In Review</button>
+      <button class="tab-btn" onclick="filterTab('APPROVED', this)">Approved</button>
+      <button class="tab-btn" onclick="filterTab('DECLINED', this)">Declined</button>
+    </div>
+
+    <div class="panel-grid">
+      <!-- CLAIMS LIST -->
+      <div>
+        <div id="adj-claims-list">
+          <div style="text-align:center;padding:40px;color:var(--gray-400)">⏳ Loading claims…</div>
+        </div>
+      </div>
+
+      <!-- DETAIL PANEL -->
+      <div class="detail-panel" id="detail-panel">
+        <div style="padding:48px 24px;text-align:center;color:var(--gray-400)">
+          <div style="font-size:48px;margin-bottom:12px">👈</div>
+          <div style="font-size:14px;font-weight:500">Select a claim to review</div>
+          <div style="font-size:12px;margin-top:6px">Click on any claim from the list</div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script src="{% static 'shared.js' %}"></script>
+<script>
+  renderLayout('adjuster');
+  renderTopbar('Claims Review Panel', 'Adjuster & Admin workspace');
+
+  let allClaims = [];
+  let selectedClaim = null;
+  let decisionType = null;
+
+  async function loadAdjClaims() {
+    try {
+      const [cRes, dRes] = await Promise.all([
+        apiFetch('/claims/?ordering=-created_at'),
+        apiFetch('/dashboard/'),
+      ]);
+      if (cRes) { const d = await cRes.json(); allClaims = d.results || d; }
+      if (dRes) {
+        const d = await dRes.json();
+        const s = d.stats || {};
+        document.getElementById('s-pending').textContent  = s.pending_claims ?? '—';
+        document.getElementById('s-approved').textContent = s.approved_claims ?? '—';
+        document.getElementById('s-declined').textContent = s.declined_claims ?? '—';
+        document.getElementById('s-total').textContent    = s.total_claims ?? '—';
+      }
+      renderList(allClaims);
+    } catch(e) {}
+  }
+
+  function filterTab(status, btn) {
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    renderList(status === 'ALL' ? allClaims : allClaims.filter(c => c.status === status));
+  }
+
+  function renderList(claims) {
+    const container = document.getElementById('adj-claims-list');
+    if (claims.length === 0) {
+      container.innerHTML = '<div style="text-align:center;padding:40px;color:var(--gray-400)">No claims found</div>';
+      return;
+    }
+    container.innerHTML = claims.map(c => `
+      <div class="claim-row ${selectedClaim?.id === c.id ? 'selected' : ''}" id="row-${c.id}" onclick="selectClaim('${c.id}')">
+        <div class="cr-icon">${{DRAFT:'📝',SUBMITTED:'📤',UNDER_REVIEW:'🔍',APPROVED:'✅',DECLINED:'❌',SETTLED:'💰'}[c.status]||'📋'}</div>
+        <div class="cr-info">
+          <div class="cr-num">${c.claim_number}</div>
+          <div class="cr-meta">${c.client_name||'Client'} · ${c.incident_type?.replace(/_/g,' ')} · ${formatDate(c.incident_date)}</div>
+        </div>
+        <div class="cr-right">
+          ${statusBadge(c.status)}
+          <div class="cr-amount">${formatCurrency(c.claimed_amount)}</div>
+          ${c.processing_days != null ? `<div class="cr-days">${c.processing_days}d old</div>` : ''}
+        </div>
+      </div>
+    `).join('');
+  }
+
+  async function selectClaim(id) {
+    document.querySelectorAll('.claim-row').forEach(r => r.classList.remove('selected'));
+    document.getElementById(`row-${id}`)?.classList.add('selected');
+
+    const panel = document.getElementById('detail-panel');
+    panel.innerHTML = '<div style="padding:48px;text-align:center;color:var(--gray-400)">⏳ Loading…</div>';
+
+    try {
+      const res = await apiFetch(`/claims/${id}/`);
+      if (!res) return;
+      selectedClaim = await res.json();
+      renderDetailPanel(selectedClaim);
+    } catch(e) {}
+  }
+
+  function renderDetailPanel(c) {
+    const fraudScore = c.ai_fraud_score;
+    const fraudClass = fraudScore == null ? 'fraud-low' : fraudScore < 0.3 ? 'fraud-low' : fraudScore < 0.7 ? 'fraud-med' : 'fraud-high';
+    const fraudLabel = fraudScore == null ? '—' : fraudScore < 0.3 ? '🟢 Low Risk' : fraudScore < 0.7 ? '🟡 Medium Risk' : '🔴 High Risk';
+
+    document.getElementById('detail-panel').innerHTML = `
+      <div class="dp-header">
+        <div class="dp-claim-num">${c.claim_number}</div>
+        <div class="dp-client">${c.client_info?.full_name || 'Client'} · ${c.client_info?.email || ''}</div>
+        <div style="margin-top:10px">${statusBadge(c.status)}</div>
+      </div>
+
+      <div class="dp-body">
+
+        <!-- INCIDENT -->
+        <div class="dp-section">
+          <div class="dp-section-title">Incident Details</div>
+          <div class="dp-row"><div class="dp-key">Date</div><div class="dp-val">${formatDate(c.incident_date)}</div></div>
+          <div class="dp-row"><div class="dp-key">Location</div><div class="dp-val">${c.incident_location||'—'}</div></div>
+          <div class="dp-row"><div class="dp-key">Type</div><div class="dp-val">${c.incident_type?.replace(/_/g,' ')||'—'}</div></div>
+          <div class="dp-row"><div class="dp-key">Fault</div><div class="dp-val">${c.fault_type?.replace(/_/g,' ')||'—'}</div></div>
+          <div class="dp-row"><div class="dp-key">Police Report</div><div class="dp-val">${c.police_report_filed ? `Yes — ${c.police_report_number||''}` : 'No'}</div></div>
+          <div style="margin-top:8px;padding:10px;background:var(--gray-50);border-radius:8px;font-size:12px;color:var(--gray-600);line-height:1.5">${c.incident_description||'—'}</div>
+        </div>
+
+        <!-- VEHICLE -->
+        <div class="dp-section">
+          <div class="dp-section-title">Vehicle & Policy</div>
+          <div class="dp-row"><div class="dp-key">Vehicle</div><div class="dp-val">${c.vehicle_info ? `${c.vehicle_info.year} ${c.vehicle_info.make} ${c.vehicle_info.model}` : '—'}</div></div>
+          <div class="dp-row"><div class="dp-key">Plate</div><div class="dp-val">${c.vehicle_info?.license_plate||'—'}</div></div>
+          <div class="dp-row"><div class="dp-key">Policy</div><div class="dp-val">${c.policy_info?.policy_number||'—'}</div></div>
+          <div class="dp-row"><div class="dp-key">Cover</div><div class="dp-val">${c.policy_info?.cover_type?.replace(/_/g,' ')||'—'}</div></div>
+          <div class="dp-row"><div class="dp-key">Sum Insured</div><div class="dp-val">${formatCurrency(c.policy_info?.sum_insured)}</div></div>
+          <div class="dp-row"><div class="dp-key">Claimed Amount</div><div class="dp-val" style="color:var(--green-main);font-weight:700">${formatCurrency(c.claimed_amount)}</div></div>
+        </div>
+
+        <!-- AI -->
+        ${c.ai_damage_summary || c.ai_estimated_repair || c.ai_fraud_score != null ? `
+        <div class="dp-section">
+          <div class="dp-section-title">AI Assessment</div>
+          <div class="fraud-indicator ${fraudClass}" style="margin-bottom:10px">
+            🤖 Fraud Risk: ${fraudLabel}
+            ${fraudScore != null ? `<span style="margin-left:auto;font-size:11px;opacity:0.8">${(fraudScore*100).toFixed(0)}%</span>` : ''}
+          </div>
+          ${c.ai_estimated_repair ? `<div class="dp-row"><div class="dp-key">AI Repair Estimate</div><div class="dp-val" style="color:var(--green-main)">${formatCurrency(c.ai_estimated_repair)}</div></div>` : ''}
+          ${c.ai_damage_summary ? `<div style="font-size:12px;color:var(--gray-600);background:var(--gray-50);padding:10px;border-radius:8px;margin-top:8px;line-height:1.5">${c.ai_damage_summary}</div>` : ''}
+        </div>
+        ` : ''}
+
+        <!-- DOCUMENTS -->
+        <div class="dp-section">
+          <div class="dp-section-title">Documents (${(c.documents||[]).length})</div>
+          ${(c.documents||[]).length === 0
+            ? '<div style="font-size:12px;color:var(--gray-400)">No documents uploaded</div>'
+            : (c.documents||[]).map(d => `
+              <a href="${d.file_url||'#'}" target="_blank" class="doc-chip" style="margin-bottom:6px;display:inline-flex">
+                📎 ${d.document_type?.replace(/_/g,' ')}
+              </a>
+            `).join('')
+          }
+        </div>
+
+        <!-- DECISION (only for reviewable statuses) -->
+        ${['SUBMITTED','UNDER_REVIEW'].includes(c.status) ? `
+        <div class="dp-section">
+          <div class="dp-section-title">Make Decision</div>
+          <div class="decision-form">
+            <div class="decision-tabs">
+              <button class="dt-btn approve" onclick="setDecision('approve',this)">✅ Approve</button>
+              <button class="dt-btn decline" onclick="setDecision('decline',this)">❌ Decline</button>
+            </div>
+
+            <div class="approve-fields" id="approve-fields">
+              <div class="form-group">
+                <label>Approved Amount (USD) *</label>
+                <input type="number" class="form-control" id="dec-approved-amount" placeholder="0.00" min="0" step="0.01" value="${c.claimed_amount||''}"/>
+              </div>
+              <div class="form-group">
+                <label>Excess Applied (USD)</label>
+                <input type="number" class="form-control" id="dec-excess" placeholder="0.00" min="0" step="0.01" value="${c.policy_info?.excess_amount||'0'}"/>
+              </div>
+            </div>
+
+            <div class="decline-fields" id="decline-fields">
+              <div class="form-group">
+                <label>Reason for Declining *</label>
+                <textarea class="form-control" id="dec-decline-reason" rows="3" placeholder="Provide a clear reason for declining this claim…"></textarea>
+              </div>
+            </div>
+
+            <div class="form-group">
+              <label>Adjuster Notes</label>
+              <textarea class="form-control" id="dec-notes" rows="2" placeholder="Internal notes (not shared with client)…">${c.adjuster_notes||''}</textarea>
+            </div>
+
+            <button class="btn btn-green" style="width:100%" onclick="submitDecision('${c.id}')" id="dec-submit-btn">
+              Submit Decision
+            </button>
+          </div>
+        </div>
+        ` : c.adjuster_notes ? `
+        <div class="dp-section">
+          <div class="dp-section-title">Adjuster Notes</div>
+          <div style="font-size:13px;color:var(--gray-600);background:var(--gray-50);padding:10px;border-radius:8px">${c.adjuster_notes}</div>
+          ${c.decline_reason ? `<div style="margin-top:8px;font-size:13px;color:#dc2626;background:#fef2f2;padding:10px;border-radius:8px">${c.decline_reason}</div>` : ''}
+        </div>
+        ` : ''}
+
+      </div>
+    `;
+  }
+
+  function setDecision(type, btn) {
+    decisionType = type;
+    document.querySelectorAll('.dt-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    document.getElementById('approve-fields').classList.toggle('show', type === 'approve');
+    document.getElementById('decline-fields').classList.toggle('show', type === 'decline');
+  }
+
+  async function submitDecision(claimId) {
+    if (!decisionType) { showToast('Please select Approve or Decline', 'error'); return; }
+
+    const payload = { decision: decisionType.toUpperCase() };
+    if (decisionType === 'approve') {
+      payload.approved_amount = document.getElementById('dec-approved-amount').value;
+      payload.excess_applied  = document.getElementById('dec-excess').value || 0;
+      if (!payload.approved_amount) { showToast('Approved amount is required', 'error'); return; }
+    } else {
+      payload.decline_reason = document.getElementById('dec-decline-reason').value;
+      if (!payload.decline_reason) { showToast('Please provide a decline reason', 'error'); return; }
+    }
+    payload.adjuster_notes = document.getElementById('dec-notes').value;
+
+    const btn = document.getElementById('dec-submit-btn');
+    btn.textContent = '⏳ Submitting…'; btn.disabled = true;
+
+    try {
+      const res = await apiFetch(`/claims/${claimId}/decision/`, { method: 'POST', body: JSON.stringify(payload) });
+      if (!res) return;
+      if (res.ok) {
+        showToast(`Claim ${decisionType === 'approve' ? 'approved ✅' : 'declined ❌'} successfully`);
+        await loadAdjClaims();
+        selectClaim(claimId);
+      } else {
+        const data = await res.json();
+        showToast(Object.values(data).flat().join(' ') || 'Action failed', 'error');
+        btn.textContent = 'Submit Decision'; btn.disabled = false;
+      }
+    } catch(e) {
+      showToast('Connection error', 'error');
+      btn.textContent = 'Submit Decision'; btn.disabled = false;
+    }
+  }
+
+  loadAdjClaims();
+</script>
+</body>
+</html>

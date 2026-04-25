@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Zimnat Insurance — Monthly Reports</title>
+{% load static %}
+<link rel="stylesheet" href="{% static 'shared.css' %}"/>
+<style>
+  .period-bar {
+    display:flex; align-items:center; gap:12px; margin-bottom:24px;
+    background:white; border:1px solid var(--gray-200); border-radius:var(--radius);
+    padding:16px 20px;
+  }
+  .period-bar label { font-size:13px; font-weight:600; color:var(--gray-600); }
+  .period-bar select, .period-bar input {
+    border:1.5px solid var(--green-border); border-radius:8px;
+    padding:7px 12px; font-size:13px; font-family:'DM Sans',sans-serif;
+    color:var(--gray-800); background:white; outline:none;
+  }
+  .period-bar select:focus, .period-bar input:focus { border-color:var(--green-main); }
+  .period-bar .btn { margin-left:auto; }
+
+  .kpi-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:16px; margin-bottom:24px; }
+  .kpi-card {
+    background:white; border:1px solid var(--gray-200); border-radius:var(--radius);
+    padding:20px; display:flex; flex-direction:column; gap:6px;
+  }
+  .kpi-label  { font-size:11px; text-transform:uppercase; letter-spacing:0.5px; color:var(--gray-400); font-weight:700; }
+  .kpi-value  { font-size:30px; font-weight:800; color:var(--green-dark); line-height:1; }
+  .kpi-sub    { font-size:12px; color:var(--gray-500); }
+  .kpi-card.yellow .kpi-value { color:#b45309; }
+  .kpi-card.red    .kpi-value { color:#dc2626; }
+  .kpi-card.blue   .kpi-value { color:#1d4ed8; }
+
+  .grid-2 { display:grid; grid-template-columns:1fr 1fr; gap:22px; margin-bottom:24px; }
+
+  .bar-wrap { padding:4px 0; }
+  .bar-item { display:flex; align-items:center; gap:10px; margin-bottom:10px; }
+  .bar-label { width:120px; font-size:12px; color:var(--gray-600); text-align:right; flex-shrink:0; text-overflow:ellipsis; overflow:hidden; white-space:nowrap; }
+  .bar-track { flex:1; height:12px; background:var(--gray-100); border-radius:6px; overflow:hidden; }
+  .bar-fill  { height:100%; border-radius:6px; transition:width 0.8s ease; background:var(--green-main); }
+  .bar-val   { width:36px; font-size:12px; color:var(--gray-600); font-weight:700; text-align:right; }
+
+  .adj-table { width:100%; border-collapse:collapse; font-size:13px; }
+  .adj-table th { text-align:left; font-size:11px; font-weight:700; color:var(--gray-400); text-transform:uppercase; letter-spacing:0.4px; padding:8px 10px; border-bottom:2px solid var(--gray-200); }
+  .adj-table td { padding:12px 10px; border-bottom:1px solid var(--gray-100); color:var(--gray-700); }
+  .adj-table tr:hover td { background:var(--green-pale); }
+  .adj-table .name { font-weight:600; color:var(--green-dark); }
+
+  .fin-row { display:flex; justify-content:space-between; align-items:center; padding:12px 0; border-bottom:1px solid var(--gray-100); }
+  .fin-row:last-child { border-bottom:none; }
+  .fin-label { font-size:13px; color:var(--gray-600); }
+  .fin-value { font-size:16px; font-weight:700; color:var(--green-dark); }
+  .fin-value.red { color:#dc2626; }
+
+  .empty-state { text-align:center; padding:60px 0; color:var(--gray-400); }
+  .empty-state div { font-size:40px; margin-bottom:12px; }
+
+  @media print {
+    .sidebar, .topbar, .period-bar .btn, .notif-panel { display:none!important; }
+    .main-content { margin-left:0!important; }
+    body { background:white!important; }
+  }
+</style>
+</head>
+<body>
+<div class="main-content">
+  <div class="page-content">
+
+    <!-- Period picker -->
+    <div class="period-bar">
+      <label>Month</label>
+      <select id="sel-month">
+        <option value="1">January</option><option value="2">February</option>
+        <option value="3">March</option><option value="4">April</option>
+        <option value="5">May</option><option value="6">June</option>
+        <option value="7">July</option><option value="8">August</option>
+        <option value="9">September</option><option value="10">October</option>
+        <option value="11">November</option><option value="12">December</option>
+      </select>
+      <label>Year</label>
+      <input type="number" id="sel-year" value="" min="2020" max="2030" style="width:90px"/>
+      <button class="btn btn-green" onclick="loadReport()">Generate Report</button>
+      <button class="btn btn-outline" onclick="window.print()">🖨 Print / PDF</button>
+    </div>
+
+    <!-- Report content -->
+    <div id="report-content">
+      <div class="empty-state">
+        <div>📊</div>
+        <p>Select a month and year, then click <strong>Generate Report</strong></p>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script src="{% static 'shared.js' %}"></script>
+{% verbatim %}
+<script>
+  renderLayout('reports');
+  renderTopbar('Monthly Reports', 'Operational insights for management');
+
+  // Default to current month/year
+  const now = new Date();
+  document.getElementById('sel-month').value = now.getMonth() + 1;
+  document.getElementById('sel-year').value  = now.getFullYear();
+
+  async function loadReport() {
+    const month = document.getElementById('sel-month').value;
+    const year  = document.getElementById('sel-year').value;
+    const rc    = document.getElementById('report-content');
+
+    rc.innerHTML = '<div class="empty-state"><div>⏳</div><p>Generating report…</p></div>';
+
+    try {
+      const res = await apiFetch(`/reports/monthly/?year=${year}&month=${month}`);
+      if (!res || !res.ok) {
+        rc.innerHTML = '<div class="empty-state"><div>⚠️</div><p style="color:#dc2626">Failed to load report. Please try again.</p></div>';
+        return;
+      }
+      const d = await res.json();
+      renderReport(d);
+    } catch(e) {
+      rc.innerHTML = '<div class="empty-state"><div>⚠️</div><p style="color:#dc2626">Connection error.</p></div>';
+    }
+  }
+
+  function renderReport(d) {
+    const v  = d.volume;
+    const f  = d.financials;
+    const rc = document.getElementById('report-content');
+
+    // Type breakdown bars
+    const typeNames = {
+      COLLISION:'Collision', THEFT:'Theft', FIRE:'Fire',
+      FLOOD:'Flood', VANDALISM:'Vandalism', OTHER:'Other',
+      THIRD_PARTY:'Third Party', WINDSCREEN:'Windscreen',
+    };
+    const maxType = Math.max(...(d.incident_type_breakdown||[]).map(t=>t.count), 1);
+    const typeRows = (d.incident_type_breakdown||[]).map(t => `
+      <div class="bar-item">
+        <div class="bar-label">${typeNames[t.incident_type]||t.incident_type}</div>
+        <div class="bar-track"><div class="bar-fill" style="width:${(t.count/maxType)*100}%"></div></div>
+        <div class="bar-val">${t.count}</div>
+      </div>
+    `).join('') || '<p style="color:var(--gray-400);font-size:13px;padding:12px 0">No claims this period.</p>';
+
+    // Adjuster table
+    const adjRows = (d.adjuster_performance||[]).map(a => `
+      <tr>
+        <td class="name">${a.adjuster}</td>
+        <td>${a.assigned}</td>
+        <td><span style="color:#16a34a;font-weight:700">${a.approved}</span></td>
+        <td><span style="color:#dc2626;font-weight:700">${a.declined}</span></td>
+        <td>${a.pending}</td>
+        <td style="font-weight:700;color:var(--green-dark)">USD ${parseFloat(a.total_approved_usd).toLocaleString(undefined,{minimumFractionDigits:2})}</td>
+      </tr>
+    `).join('') || '<tr><td colspan="6" style="text-align:center;color:var(--gray-400);padding:20px">No adjuster data.</td></tr>';
+
+    rc.innerHTML = `
+      <div style="margin-bottom:8px;font-size:13px;color:var(--gray-400)">
+        Report period: <strong style="color:var(--green-dark)">${d.period_label}</strong>
+        &nbsp;·&nbsp; Avg processing time: <strong>${d.avg_processing_days} days</strong>
+      </div>
+
+      <!-- KPIs -->
+      <div class="kpi-grid">
+        <div class="kpi-card">
+          <div class="kpi-label">Total Claims</div>
+          <div class="kpi-value">${v.total}</div>
+          <div class="kpi-sub">${v.under_review} under review</div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-label">Approval Rate</div>
+          <div class="kpi-value">${f.approval_rate_pct}%</div>
+          <div class="kpi-sub">${v.approved} approved · ${v.settled} settled</div>
+        </div>
+        <div class="kpi-card red">
+          <div class="kpi-label">Decline Rate</div>
+          <div class="kpi-value">${f.decline_rate_pct}%</div>
+          <div class="kpi-sub">${v.declined} claims declined</div>
+        </div>
+        <div class="kpi-card blue">
+          <div class="kpi-label">Total Approved</div>
+          <div class="kpi-value">$${(f.total_approved_usd/1000).toFixed(1)}k</div>
+          <div class="kpi-sub">USD ${parseFloat(f.total_approved_usd).toLocaleString(undefined,{minimumFractionDigits:2})}</div>
+        </div>
+      </div>
+
+      <!-- Middle row -->
+      <div class="grid-2">
+        <!-- Incident type breakdown -->
+        <div class="card">
+          <div class="card-header"><div class="card-title">Claims by Incident Type</div></div>
+          <div class="card-body">
+            <div class="bar-wrap">${typeRows}</div>
+          </div>
+        </div>
+
+        <!-- Financial summary -->
+        <div class="card">
+          <div class="card-header"><div class="card-title">Financial Summary</div></div>
+          <div class="card-body">
+            <div class="fin-row">
+              <div class="fin-label">Total Claimed</div>
+              <div class="fin-value">USD ${parseFloat(f.total_claimed_usd).toLocaleString(undefined,{minimumFractionDigits:2})}</div>
+            </div>
+            <div class="fin-row">
+              <div class="fin-label">Total Approved</div>
+              <div class="fin-value">USD ${parseFloat(f.total_approved_usd).toLocaleString(undefined,{minimumFractionDigits:2})}</div>
+            </div>
+            <div class="fin-row">
+              <div class="fin-label">Total Settled</div>
+              <div class="fin-value">USD ${parseFloat(f.total_settled_usd).toLocaleString(undefined,{minimumFractionDigits:2})}</div>
+            </div>
+            <div class="fin-row">
+              <div class="fin-label">Avg Processing Time</div>
+              <div class="fin-value">${d.avg_processing_days} days</div>
+            </div>
+            <div class="fin-row" style="margin-top:8px;padding-top:16px;border-top:2px solid var(--green-border)">
+              <div class="fin-label" style="font-weight:700;color:var(--green-dark)">Claim Savings</div>
+              <div class="fin-value" style="color:#16a34a">
+                USD ${Math.max(0, parseFloat(f.total_claimed_usd) - parseFloat(f.total_approved_usd)).toLocaleString(undefined,{minimumFractionDigits:2})}
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Adjuster performance -->
+      <div class="card">
+        <div class="card-header"><div class="card-title">Adjuster Performance</div></div>
+        <div class="card-body">
+          <table class="adj-table">
+            <thead>
+              <tr>
+                <th>Adjuster</th>
+                <th>Assigned</th>
+                <th>Approved</th>
+                <th>Declined</th>
+                <th>Pending</th>
+                <th>Total Approved (USD)</th>
+              </tr>
+            </thead>
+            <tbody>${adjRows}</tbody>
+          </table>
+        </div>
+      </div>
+    `;
+  }
+</script>
+{% endverbatim %}
+</body>
+</html>

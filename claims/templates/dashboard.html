@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Zimnat Insurance — Dashboard</title>
+{% load static %}
+<link rel="stylesheet" href="{% static 'shared.css' %}"/>
+<style>
+  .welcome-banner {
+    background: linear-gradient(135deg, var(--green-dark) 0%, var(--green-main) 100%);
+    border-radius: var(--radius);
+    padding: 28px 32px;
+    margin-bottom: 28px;
+    display: flex; align-items: center; justify-content: space-between;
+    position: relative; overflow: hidden;
+  }
+  .welcome-banner::before {
+    content: '🛡️';
+    position: absolute; right: 32px; top: 50%;
+    transform: translateY(-50%);
+    font-size: 80px; opacity: 0.1;
+  }
+  .welcome-banner h2 { font-family: 'Playfair Display', serif; color: white; font-size: 24px; margin-bottom: 4px; }
+  .welcome-banner p { color: rgba(255,255,255,0.7); font-size: 14px; }
+  .welcome-banner .btn-yellow { margin-top: 16px; }
+
+  .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 22px; }
+  .grid-3 { display: grid; grid-template-columns: 2fr 1fr; gap: 22px; }
+
+  .action-cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-bottom: 28px; }
+  .action-card {
+    background: white;
+    border-radius: var(--radius);
+    padding: 20px;
+    border: 1px solid var(--gray-200);
+    cursor: pointer;
+    transition: all 0.2s;
+    text-decoration: none;
+    display: flex; flex-direction: column; align-items: center;
+    text-align: center; gap: 10px;
+  }
+  .action-card:hover { border-color: var(--green-main); transform: translateY(-2px); box-shadow: var(--shadow-md); }
+  .action-card .ac-icon { font-size: 30px; }
+  .action-card .ac-title { font-size: 14px; font-weight: 600; color: var(--green-dark); }
+  .action-card .ac-desc { font-size: 12px; color: var(--gray-400); }
+
+  .chart-bar-wrap { padding: 0 8px; }
+  .chart-bar-item { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
+  .chart-bar-label { width: 70px; font-size: 12px; color: var(--gray-600); text-align: right; flex-shrink: 0; }
+  .chart-bar-track { flex: 1; height: 10px; background: var(--gray-100); border-radius: 5px; overflow: hidden; }
+  .chart-bar-fill { height: 100%; border-radius: 5px; transition: width 1s ease; }
+  .chart-bar-val { width: 40px; font-size: 12px; color: var(--gray-600); font-weight: 600; }
+
+  .policy-card {
+    border: 1.5px solid var(--green-border);
+    border-radius: var(--radius);
+    padding: 18px;
+    margin-bottom: 12px;
+    transition: all 0.2s;
+  }
+  .policy-card:hover { border-color: var(--green-main); background: var(--green-pale); }
+  .policy-card .pc-top { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 10px; }
+  .policy-card .pc-num { font-size: 13px; font-weight: 700; color: var(--green-dark); }
+  .policy-card .pc-details { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+  .policy-card .pc-item { font-size: 12px; }
+  .policy-card .pc-item span { color: var(--gray-400); display: block; font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px; }
+</style>
+</head>
+<body>
+
+<div class="main-content">
+  <div class="page-content" id="page-content">
+    <!-- Loaded by JS -->
+    <div style="display:flex;align-items:center;justify-content:center;height:60vh">
+      <div style="text-align:center;color:var(--gray-400)">
+        <div style="font-size:40px;margin-bottom:12px">⏳</div>
+        <div>Loading dashboard…</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="{% static 'shared.js' %}"></script>
+<script>
+  renderLayout('dashboard');
+  renderTopbar('Dashboard', 'Welcome back');
+
+  async function loadDashboard() {
+    const user = getUser();
+    const pc = document.getElementById('page-content');
+
+    // Fetch data
+    let stats = {}, claims = [], policies = [];
+    try {
+      const [sRes, cRes, pRes] = await Promise.all([
+        apiFetch('/dashboard/'),
+        apiFetch('/claims/?ordering=-created_at'),
+        apiFetch('/policies/'),
+      ]);
+      if (sRes) { const d = await sRes.json(); stats = d.stats || {}; }
+      if (cRes) { const d = await cRes.json(); claims = d.results || d; }
+      if (pRes) { const d = await pRes.json(); policies = d.results || d; }
+    } catch(e) {}
+
+    const recentClaims = claims.slice(0, 6);
+
+    pc.innerHTML = `
+      <!-- WELCOME BANNER -->
+      <div class="welcome-banner">
+        <div>
+          <h2>Good day, ${user.first_name || 'Client'} 👋</h2>
+          <p>Here's an overview of your insurance claims activity</p>
+          <a href="submit-claim.html" class="btn btn-yellow" style="margin-top:14px; display:inline-flex;">
+            ➕ Submit New Claim
+          </a>
+        </div>
+      </div>
+
+      <!-- STAT CARDS -->
+      <div class="stats-grid">
+        <div class="stat-card green">
+          <div class="stat-icon">📋</div>
+          <div class="stat-value">${stats.total_claims ?? claims.length}</div>
+          <div class="stat-label">Total Claims</div>
+          <div class="stat-change up">↑ ${stats.claims_this_month ?? 0} this month</div>
+        </div>
+        <div class="stat-card yellow">
+          <div class="stat-icon">⏳</div>
+          <div class="stat-value">${stats.pending_claims ?? claims.filter(c=>['SUBMITTED','UNDER_REVIEW'].includes(c.status)).length}</div>
+          <div class="stat-label">Pending Review</div>
+          <div class="stat-change">Awaiting adjuster decision</div>
+        </div>
+        <div class="stat-card blue">
+          <div class="stat-icon">✅</div>
+          <div class="stat-value">${stats.approved_claims ?? claims.filter(c=>c.status==='APPROVED').length}</div>
+          <div class="stat-label">Approved</div>
+          <div class="stat-change up">Claims approved</div>
+        </div>
+        <div class="stat-card red">
+          <div class="stat-icon">❌</div>
+          <div class="stat-value">${stats.declined_claims ?? claims.filter(c=>c.status==='DECLINED').length}</div>
+          <div class="stat-label">Declined</div>
+          <div class="stat-change">Review reasons</div>
+        </div>
+      </div>
+
+      <!-- QUICK ACTIONS -->
+      <div class="action-cards">
+        <a href="submit-claim.html" class="action-card">
+          <div class="ac-icon">📝</div>
+          <div class="ac-title">Submit Claim</div>
+          <div class="ac-desc">Report a new accident or incident</div>
+        </a>
+        <a href="track-claim.html" class="action-card">
+          <div class="ac-icon">🔍</div>
+          <div class="ac-title">Track Claims</div>
+          <div class="ac-desc">Monitor status of your claims</div>
+        </a>
+        <a href="#" class="action-card">
+          <div class="ac-icon">📄</div>
+          <div class="ac-title">My Policies</div>
+          <div class="ac-desc">View your active policies</div>
+        </a>
+      </div>
+
+      <!-- BOTTOM GRID -->
+      <div class="grid-3">
+        <!-- RECENT CLAIMS TABLE -->
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title">Recent Claims</div>
+            <a href="track-claim.html" class="btn btn-outline btn-sm">View All →</a>
+          </div>
+          <div class="card-body">
+            ${recentClaims.length === 0 ? `
+              <div style="text-align:center;padding:32px;color:var(--gray-400)">
+                <div style="font-size:36px;margin-bottom:8px">📋</div>
+                <p style="font-size:14px">No claims yet</p>
+                <a href="submit-claim.html" class="btn btn-green btn-sm" style="margin-top:12px">Submit your first claim</a>
+              </div>
+            ` : `
+              <div class="table-wrap">
+                <table>
+                  <thead><tr>
+                    <th>Claim No.</th><th>Date</th><th>Type</th><th>Status</th><th>Amount</th>
+                  </tr></thead>
+                  <tbody>
+                    ${recentClaims.map(c => `
+                      <tr onclick="window.location='track-claim.html'" style="cursor:pointer">
+                        <td><strong>${c.claim_number}</strong></td>
+                        <td>${formatDate(c.incident_date)}</td>
+                        <td>${c.incident_type?.replace('_',' ')}</td>
+                        <td>${statusBadge(c.status)}</td>
+                        <td>${formatCurrency(c.claimed_amount)}</td>
+                      </tr>
+                    `).join('')}
+                  </tbody>
+                </table>
+              </div>
+            `}
+          </div>
+        </div>
+
+        <!-- SIDEBAR: Claims breakdown + Policies -->
+        <div style="display:flex;flex-direction:column;gap:22px">
+          <!-- Claims chart -->
+          <div class="card">
+            <div class="card-header"><div class="card-title">Claims Breakdown</div></div>
+            <div class="card-body">
+              <div class="chart-bar-wrap" id="chart-bars"></div>
+            </div>
+          </div>
+
+          <!-- Active Policies -->
+          <div class="card">
+            <div class="card-header"><div class="card-title">Active Policies</div></div>
+            <div class="card-body">
+              ${policies.length === 0 ? `<p style="font-size:13px;color:var(--gray-400);text-align:center;padding:16px 0">No active policies found</p>` :
+                policies.slice(0,2).map(p => `
+                  <div class="policy-card">
+                    <div class="pc-top">
+                      <div class="pc-num">${p.policy_number}</div>
+                      <span class="badge badge-approved">${p.status}</span>
+                    </div>
+                    <div class="pc-details">
+                      <div class="pc-item">${p.cover_type?.replace('_',' ')}<span>Cover Type</span></div>
+                      <div class="pc-item">${formatCurrency(p.sum_insured)}<span>Sum Insured</span></div>
+                      <div class="pc-item">${formatDate(p.end_date)}<span>Expires</span></div>
+                    </div>
+                  </div>
+                `).join('')
+              }
+            </div>
+          </div>
+        </div>
+      </div>
+    `;
+
+    // Render chart bars
+    const chartData = [
+      { label: 'Submitted', count: claims.filter(c=>c.status==='SUBMITTED').length, color: '#3b82f6' },
+      { label: 'In Review', count: claims.filter(c=>c.status==='UNDER_REVIEW').length, color: '#f5c518' },
+      { label: 'Approved',  count: claims.filter(c=>c.status==='APPROVED').length,  color: '#1a7a4a' },
+      { label: 'Declined',  count: claims.filter(c=>c.status==='DECLINED').length,  color: '#ef4444' },
+      { label: 'Settled',   count: claims.filter(c=>c.status==='SETTLED').length,   color: '#0a4a2f' },
+    ];
+    const maxVal = Math.max(...chartData.map(d=>d.count), 1);
+    document.getElementById('chart-bars').innerHTML = chartData.map(d => `
+      <div class="chart-bar-item">
+        <div class="chart-bar-label">${d.label}</div>
+        <div class="chart-bar-track">
+          <div class="chart-bar-fill" style="width:${(d.count/maxVal)*100}%;background:${d.color}"></div>
+        </div>
+        <div class="chart-bar-val">${d.count}</div>
+      </div>
+    `).join('');
+  }
+
+  loadDashboard();
+</script>
+</body>
+</html>

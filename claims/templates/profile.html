@@ -1,0 +1,1129 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Zimnat Insurance — My Profile</title>
+{% load static %}
+<link rel="stylesheet" href="{% static 'shared.css' %}"/>
+<style>
+
+  .profile-layout { display: grid; grid-template-columns: 300px 1fr; gap: 24px; align-items: start; }
+
+  /* ── LEFT CARD ── */
+  .profile-left { display: flex; flex-direction: column; gap: 18px; }
+
+  .profile-avatar-card {
+    background: white; border-radius: var(--radius);
+    border: 1px solid var(--gray-200);
+    padding: 28px 20px; text-align: center;
+    box-shadow: var(--shadow-sm);
+  }
+  .avatar-circle {
+    width: 90px; height: 90px; border-radius: 50%;
+    background: linear-gradient(135deg, var(--green-main), var(--green-dark));
+    display: flex; align-items: center; justify-content: center;
+    font-size: 36px; font-weight: 700; color: white;
+    margin: 0 auto 14px;
+    box-shadow: 0 4px 16px rgba(26,122,74,0.35);
+    border: 4px solid var(--green-pale);
+  }
+  .profile-name { font-family: 'Playfair Display', serif; font-size: 20px; color: var(--green-dark); }
+  .profile-email { font-size: 13px; color: var(--gray-400); margin-top: 4px; }
+  .profile-role {
+    display: inline-block; margin-top: 10px;
+    background: var(--green-pale); color: var(--green-dark);
+    font-size: 11px; font-weight: 700; padding: 4px 12px;
+    border-radius: 20px; text-transform: uppercase; letter-spacing: 0.5px;
+  }
+  .profile-joined { font-size: 12px; color: var(--gray-400); margin-top: 10px; }
+
+  .profile-stats {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 10px;
+    margin-top: 18px; padding-top: 18px;
+    border-top: 1px solid var(--gray-100);
+  }
+  .ps-item { text-align: center; }
+  .ps-val  { font-size: 22px; font-weight: 700; color: var(--green-dark); }
+  .ps-lbl  { font-size: 11px; color: var(--gray-400); margin-top: 2px; }
+
+  /* QUICK LINKS */
+  .quick-links { background: white; border-radius: var(--radius); border: 1px solid var(--gray-200); overflow: hidden; box-shadow: var(--shadow-sm); }
+  .ql-item {
+    display: flex; align-items: center; gap: 12px;
+    padding: 13px 18px; cursor: pointer;
+    border-bottom: 1px solid var(--gray-100);
+    transition: background 0.15s; text-decoration: none;
+    color: var(--gray-600); font-size: 13px; font-weight: 500;
+  }
+  .ql-item:last-child { border-bottom: none; }
+  .ql-item:hover { background: var(--green-pale); color: var(--green-dark); }
+  .ql-item .ql-icon { font-size: 18px; width: 24px; text-align: center; }
+  .ql-item .ql-arrow { margin-left: auto; color: var(--gray-400); }
+
+  /* ── RIGHT TABS ── */
+  .profile-right { display: flex; flex-direction: column; gap: 0; }
+
+  .section-tabs {
+    display: flex; background: var(--gray-100);
+    border-radius: 12px; padding: 4px; margin-bottom: 22px;
+  }
+  .stab {
+    flex: 1; padding: 9px; border: none; background: transparent;
+    border-radius: 8px; font-family: 'DM Sans', sans-serif;
+    font-size: 13px; font-weight: 500; color: var(--gray-600);
+    cursor: pointer; transition: all 0.2s;
+  }
+  .stab.active {
+    background: white; color: var(--green-dark);
+    box-shadow: var(--shadow-sm); font-weight: 700;
+  }
+
+  .stab-panel { display: none; }
+  .stab-panel.active { display: block; animation: fadeIn 0.3s ease; }
+  @keyframes fadeIn { from{opacity:0;transform:translateY(6px)} to{opacity:1;transform:translateY(0)} }
+
+  /* PERSONAL DETAILS FORM */
+  .section-card {
+    background: white; border-radius: var(--radius);
+    border: 1px solid var(--gray-200);
+    box-shadow: var(--shadow-sm); margin-bottom: 18px;
+  }
+  .sc-header {
+    padding: 16px 22px;
+    border-bottom: 1px solid var(--gray-100);
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  .sc-title { font-family: 'Playfair Display', serif; font-size: 16px; color: var(--green-dark); }
+  .sc-body  { padding: 20px 22px; }
+
+  /* VEHICLE CARDS */
+  .vehicles-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px,1fr)); gap: 16px; margin-bottom: 18px; }
+  .vc {
+    background: white; border-radius: var(--radius);
+    border: 1.5px solid var(--gray-200);
+    padding: 18px; transition: all 0.2s; box-shadow: var(--shadow-sm);
+  }
+  .vc:hover { border-color: var(--green-main); box-shadow: var(--shadow-md); }
+  .vc-top   { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 12px; }
+  .vc-icon  { width: 44px; height: 44px; background: var(--green-pale); border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 22px; }
+  .vc-name  { font-size: 15px; font-weight: 700; color: var(--green-dark); margin-bottom: 4px; }
+  .vc-plate { display: inline-block; background: var(--green-dark); color: white; font-size: 11px; font-weight: 700; padding: 3px 10px; border-radius: 5px; letter-spacing: 1.5px; margin-bottom: 10px; }
+  .vc-grid  { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+  .vc-item .vi-lbl { font-size: 10px; color: var(--gray-400); text-transform: uppercase; letter-spacing: 0.4px; }
+  .vc-item .vi-val { font-size: 12px; font-weight: 600; color: var(--gray-800); }
+
+  /* ADD FORM */
+  .add-form {
+    background: var(--green-pale); border: 1.5px dashed var(--green-border);
+    border-radius: var(--radius); padding: 24px;
+    margin-bottom: 18px; display: none; animation: fadeIn 0.3s ease;
+  }
+  .add-form.show { display: block; }
+  .add-form-title { font-family: 'Playfair Display', serif; font-size: 17px; color: var(--green-dark); margin-bottom: 18px; }
+
+  .add-new-btn {
+    width: 100%; padding: 16px;
+    border: 2px dashed var(--green-border);
+    border-radius: var(--radius); background: white;
+    cursor: pointer; color: var(--green-main);
+    font-size: 14px; font-weight: 600;
+    transition: all 0.2s; font-family: 'DM Sans', sans-serif;
+    display: flex; align-items: center; justify-content: center; gap: 8px;
+  }
+  .add-new-btn:hover { border-color: var(--green-main); background: var(--green-pale); }
+
+  /* POLICY CARDS */
+  .pcf {
+    background: white; border-radius: var(--radius);
+    border: 1.5px solid var(--gray-200);
+    margin-bottom: 14px; overflow: hidden; box-shadow: var(--shadow-sm);
+    transition: all 0.2s;
+  }
+  .pcf:hover { border-color: var(--green-main); box-shadow: var(--shadow-md); }
+  .pcf-head {
+    padding: 16px 20px; display: flex; align-items: center; gap: 12px;
+    background: linear-gradient(135deg, var(--green-pale), white);
+    border-bottom: 1px solid var(--gray-100);
+  }
+  .pcf-icon { width: 42px; height: 42px; background: var(--green-main); border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 20px; flex-shrink: 0; }
+  .pcf-num  { font-size: 14px; font-weight: 700; color: var(--green-dark); }
+  .pcf-car  { font-size: 12px; color: var(--gray-400); margin-top: 2px; }
+  .pcf-body { padding: 16px 20px; }
+  .pcf-grid { display: grid; grid-template-columns: repeat(3,1fr); gap: 12px; }
+  .pcf-item .pil { font-size: 10px; color: var(--gray-400); text-transform: uppercase; letter-spacing: 0.4px; }
+  .pcf-item .piv { font-size: 13px; font-weight: 600; color: var(--gray-800); margin-top: 2px; }
+
+  .expiry-row { display: flex; align-items: center; gap: 10px; margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--gray-100); }
+  .exp-track  { flex: 1; height: 6px; background: var(--gray-100); border-radius: 3px; overflow: hidden; }
+  .exp-fill   { height: 100%; border-radius: 3px; transition: width 1s ease; }
+  .exp-lbl    { font-size: 11px; color: var(--gray-400); white-space: nowrap; }
+
+  /* LICENCE CARD */
+  .licence-upload-zone {
+    border: 2px dashed var(--green-border); border-radius: var(--radius);
+    padding: 36px; text-align: center; cursor: pointer;
+    transition: all 0.2s; background: var(--green-pale);
+    margin-bottom: 16px;
+  }
+  .licence-upload-zone:hover { border-color: var(--green-main); background: #d4eddf; }
+  .licence-preview {
+    max-width: 100%; border-radius: 10px;
+    border: 2px solid var(--green-border);
+    margin-bottom: 12px; display: none;
+  }
+  .licence-details { display: grid; grid-template-columns: repeat(3,1fr); gap: 14px; }
+  .ld-item .ld-lbl { font-size: 11px; color: var(--gray-400); text-transform: uppercase; letter-spacing: 0.4px; font-weight: 600; }
+  .ld-item .ld-val { font-size: 14px; font-weight: 600; color: var(--gray-800); margin-top: 3px; }
+
+  /* PASSWORD CHANGE */
+  .pw-section { max-width: 420px; }
+</style>
+</head>
+<body>
+<div class="main-content">
+  <div class="page-content">
+    <div class="profile-layout">
+
+      <!-- ── LEFT SIDEBAR ── -->
+      <div class="profile-left">
+
+        <!-- AVATAR CARD -->
+        <div class="profile-avatar-card">
+          <div class="avatar-circle" id="avatar-initials">?</div>
+          <div class="profile-name" id="profile-fullname">Loading…</div>
+          <div class="profile-email" id="profile-email"></div>
+          <div class="profile-role" id="profile-role">Client</div>
+          <div class="profile-joined" id="profile-joined"></div>
+          <div class="profile-stats">
+            <div class="ps-item">
+              <div class="ps-val" id="stat-claims">—</div>
+              <div class="ps-lbl">Claims</div>
+            </div>
+            <div class="ps-item">
+              <div class="ps-val" id="stat-vehicles">—</div>
+              <div class="ps-lbl">Vehicles</div>
+            </div>
+            <div class="ps-item">
+              <div class="ps-val" id="stat-policies">—</div>
+              <div class="ps-lbl">Policies</div>
+            </div>
+            <div class="ps-item">
+              <div class="ps-val" id="stat-settled">—</div>
+              <div class="ps-lbl">Settled</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- QUICK LINKS -->
+        <div class="quick-links">
+          <a href="/submit-claim/" class="ql-item"><span class="ql-icon">📝</span> Submit New Claim <span class="ql-arrow">›</span></a>
+          <a href="/track-claim/" class="ql-item"><span class="ql-icon">🔍</span> Track My Claims <span class="ql-arrow">›</span></a>
+          <a href="/reports/" class="ql-item"><span class="ql-icon">📊</span> View Reports <span class="ql-arrow">›</span></a>
+          <a href="/dashboard/" class="ql-item"><span class="ql-icon">🏠</span> Dashboard <span class="ql-arrow">›</span></a>
+        </div>
+
+      </div>
+
+      <!-- ── RIGHT CONTENT ── -->
+      <div class="profile-right">
+
+        <!-- SECTION TABS -->
+        <div class="section-tabs">
+          <button class="stab active" onclick="switchStab('personal', this)">👤 Personal Info</button>
+          <button class="stab" onclick="switchStab('vehicles', this)">🚗 Vehicles</button>
+          <button class="stab" onclick="switchStab('policies', this)">📄 Policies</button>
+          <button class="stab" onclick="switchStab('licence', this)">🪪 Driver's Licence</button>
+          <button class="stab" onclick="switchStab('payments', this)">💳 Pay Premium</button>
+          <button class="stab" onclick="switchStab('security', this)">🔒 Security</button>
+        </div>
+
+        <!-- ── PERSONAL INFO TAB ── -->
+        <div class="stab-panel active" id="stab-personal">
+          <div class="section-card">
+            <div class="sc-header">
+              <div class="sc-title">Personal Information</div>
+              <button class="btn btn-green btn-sm" onclick="saveProfile()" id="save-profile-btn">💾 Save Changes</button>
+            </div>
+            <div class="sc-body">
+              <div class="form-grid-2">
+                <div class="form-group">
+                  <label>First Name *</label>
+                  <input type="text" class="form-control" id="pf-first" placeholder="First name"/>
+                </div>
+                <div class="form-group">
+                  <label>Last Name *</label>
+                  <input type="text" class="form-control" id="pf-last" placeholder="Last name"/>
+                </div>
+              </div>
+              <div class="form-group">
+                <label>Email Address</label>
+                <input type="email" class="form-control" id="pf-email" disabled style="background:var(--gray-100);color:var(--gray-400)"/>
+              </div>
+              <div class="form-grid-2">
+                <div class="form-group">
+                  <label>Phone Number</label>
+                  <input type="tel" class="form-control" id="pf-phone" placeholder="+263 77 123 4567"/>
+                </div>
+                <div class="form-group">
+                  <label>Date of Birth</label>
+                  <input type="date" class="form-control" id="pf-dob"/>
+                </div>
+              </div>
+              <div class="form-grid-2">
+                <div class="form-group">
+                  <label>Gender</label>
+                  <select class="form-control" id="pf-gender">
+                    <option value="">— Select —</option>
+                    <option value="M">Male</option>
+                    <option value="F">Female</option>
+                    <option value="O">Other</option>
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label>National ID / Passport</label>
+                  <input type="text" class="form-control" id="pf-nid" placeholder="e.g. 63-123456-A-00"/>
+                </div>
+              </div>
+              <div class="form-group">
+                <label>Home Address</label>
+                <textarea class="form-control" id="pf-address" rows="2" placeholder="Street address…"></textarea>
+              </div>
+              <div class="form-group">
+                <label>City</label>
+                <input type="text" class="form-control" id="pf-city" placeholder="e.g. Harare"/>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ── VEHICLES TAB ── -->
+        <div class="stab-panel" id="stab-vehicles">
+
+          <!-- ADD VEHICLE FORM -->
+          <div class="add-form" id="add-vehicle-form">
+            <div class="add-form-title">🚗 Register a New Vehicle</div>
+            <div class="form-grid-2">
+              <div class="form-group"><label>Make (Brand) *</label><input type="text" class="form-control" id="v-make" placeholder="e.g. Toyota"/></div>
+              <div class="form-group"><label>Model *</label><input type="text" class="form-control" id="v-model" placeholder="e.g. Corolla"/></div>
+            </div>
+            <div class="form-grid-2">
+              <div class="form-group"><label>Year *</label><input type="number" class="form-control" id="v-year" placeholder="e.g. 2020" min="1980" max="2027"/></div>
+              <div class="form-group"><label>Color *</label><input type="text" class="form-control" id="v-color" placeholder="e.g. White"/></div>
+            </div>
+            <div class="form-grid-2">
+              <div class="form-group"><label>License Plate *</label><input type="text" class="form-control" id="v-plate" placeholder="e.g. ABC 1234" style="text-transform:uppercase"/></div>
+              <div class="form-group">
+                <label>Body Type *</label>
+                <select class="form-control" id="v-body">
+                  <option value="SEDAN">Sedan</option>
+                  <option value="SUV">SUV</option>
+                  <option value="HATCHBACK">Hatchback</option>
+                  <option value="PICKUP">Pickup Truck</option>
+                  <option value="VAN">Van / Minibus</option>
+                  <option value="TRUCK">Truck</option>
+                  <option value="MOTORCYCLE">Motorcycle</option>
+                  <option value="OTHER">Other</option>
+                </select>
+              </div>
+            </div>
+            <div class="form-grid-2">
+              <div class="form-group"><label>VIN Number</label><input type="text" class="form-control" id="v-vin" placeholder="Optional"/></div>
+              <div class="form-group"><label>Engine Number</label><input type="text" class="form-control" id="v-engine" placeholder="Optional"/></div>
+            </div>
+            <div style="display:flex;gap:10px;margin-top:8px">
+              <button class="btn btn-green" onclick="saveVehicle()" id="save-vehicle-btn">✅ Save Vehicle</button>
+              <button class="btn btn-outline" onclick="toggleForm('add-vehicle-form','add-vehicle-btn')">Cancel</button>
+            </div>
+          </div>
+
+          <!-- VEHICLES GRID -->
+          <div class="vehicles-grid" id="vehicles-grid">
+            <div style="grid-column:1/-1;text-align:center;padding:32px;color:var(--gray-400)">⏳ Loading…</div>
+          </div>
+
+          <button class="add-new-btn" id="add-vehicle-btn" onclick="toggleForm('add-vehicle-form','add-vehicle-btn')">
+            ➕ Register a New Vehicle
+          </button>
+        </div>
+
+        <!-- ── POLICIES TAB ── -->
+        <div class="stab-panel" id="stab-policies">
+
+          <!-- ADD POLICY FORM -->
+          <div class="add-form" id="add-policy-form">
+            <div class="add-form-title">📄 Add Your Insurance Policy</div>
+            <p style="font-size:13px;color:var(--gray-600);margin-bottom:18px">Enter the details exactly as shown on your insurance certificate.</p>
+            <div class="form-grid-2">
+              <div class="form-group"><label>Policy Number *</label><input type="text" class="form-control" id="p-number" placeholder="e.g. ZIM-MOT-12345678"/></div>
+              <div class="form-group">
+                <label>Select Vehicle *</label>
+                <select class="form-control" id="p-vehicle"><option value="">— Select your vehicle —</option></select>
+              </div>
+            </div>
+            <div class="form-grid-2">
+              <div class="form-group">
+                <label>Cover Type *</label>
+                <select class="form-control" id="p-cover">
+                  <option value="COMPREHENSIVE">Comprehensive</option>
+                  <option value="THIRD_PARTY">Third Party Only</option>
+                  <option value="FIRE_THEFT">Third Party Fire & Theft</option>
+                </select>
+              </div>
+              <div class="form-group"><label>Sum Insured (USD) *</label><input type="number" class="form-control" id="p-sum" placeholder="e.g. 15000" min="0" step="0.01"/></div>
+            </div>
+            <div class="form-grid-2">
+              <div class="form-group"><label>Annual Premium (USD) *</label><input type="number" class="form-control" id="p-premium" placeholder="e.g. 500" min="0" step="0.01"/></div>
+              <div class="form-group"><label>Excess / Deductible (USD)</label><input type="number" class="form-control" id="p-excess" placeholder="e.g. 200" min="0" step="0.01" value="0"/></div>
+            </div>
+            <div class="form-grid-2">
+              <div class="form-group"><label>Start Date *</label><input type="date" class="form-control" id="p-start"/></div>
+              <div class="form-group"><label>End Date *</label><input type="date" class="form-control" id="p-end"/></div>
+            </div>
+            <div style="display:flex;gap:10px;margin-top:8px">
+              <button class="btn btn-green" onclick="savePolicy()" id="save-policy-btn">✅ Save Policy</button>
+              <button class="btn btn-outline" onclick="toggleForm('add-policy-form','add-policy-btn')">Cancel</button>
+            </div>
+          </div>
+
+          <!-- POLICIES LIST -->
+          <div id="policies-list">
+            <div style="text-align:center;padding:32px;color:var(--gray-400)">⏳ Loading…</div>
+          </div>
+
+          <button class="add-new-btn" id="add-policy-btn" onclick="showAddPolicy()" style="margin-top:4px">
+            ➕ Add a New Policy
+          </button>
+        </div>
+
+        <!-- ── DRIVER'S LICENCE TAB ── -->
+        <div class="stab-panel" id="stab-licence">
+          <div class="section-card">
+            <div class="sc-header">
+              <div class="sc-title">🪪 Driver's Licence</div>
+              <button class="btn btn-green btn-sm" onclick="saveLicence()" id="save-licence-btn">💾 Save</button>
+            </div>
+            <div class="sc-body">
+
+              <!-- UPLOAD ZONE -->
+              <div class="licence-upload-zone" onclick="document.getElementById('licence-file').click()" id="licence-zone">
+                <div style="font-size:40px;margin-bottom:10px">🪪</div>
+                <p style="font-size:14px;font-weight:600;color:var(--green-dark)">Upload Licence Photo / Scan</p>
+                <span style="font-size:12px;color:var(--gray-400)">JPG, PNG or PDF — front side of licence</span>
+              </div>
+              <input type="file" id="licence-file" style="display:none" accept=".jpg,.jpeg,.png,.pdf" onchange="previewLicence(event)"/>
+              <img id="licence-preview" class="licence-preview" alt="Licence preview"/>
+
+              <p style="font-size:13px;color:var(--gray-600);margin-bottom:20px">Enter your driver's licence details below:</p>
+
+              <div class="licence-details">
+                <div class="form-group">
+                  <label>Licence Number *</label>
+                  <input type="text" class="form-control" id="lic-number" placeholder="e.g. 123456789"/>
+                </div>
+                <div class="form-group">
+                  <label>Licence Class</label>
+                  <select class="form-control" id="lic-class">
+                    <option value="">— Select —</option>
+                    <option value="1">Class 1 — Motorcycle</option>
+                    <option value="2">Class 2 — Light Vehicle</option>
+                    <option value="3">Class 3 — Heavy Vehicle</option>
+                    <option value="4">Class 4 — Bus / Minibus</option>
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label>Issue Date</label>
+                  <input type="date" class="form-control" id="lic-issued"/>
+                </div>
+                <div class="form-group">
+                  <label>Expiry Date</label>
+                  <input type="date" class="form-control" id="lic-expiry"/>
+                </div>
+                <div class="form-group">
+                  <label>Issuing Authority</label>
+                  <input type="text" class="form-control" id="lic-authority" placeholder="e.g. VID Zimbabwe"/>
+                </div>
+                <div class="form-group">
+                  <label>Country</label>
+                  <input type="text" class="form-control" id="lic-country" placeholder="e.g. Zimbabwe" value="Zimbabwe"/>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ── PAY PREMIUM TAB ── -->
+        <div class="stab-panel" id="stab-payments">
+
+          <!-- Active Policies to Pay -->
+          <div class="section-card" style="margin-bottom:18px">
+            <div class="sc-header">
+              <div class="sc-title">📄 Select Policy to Pay</div>
+              <span style="font-size:12px;color:var(--gray-400)">Monthly premium payment</span>
+            </div>
+            <div class="sc-body">
+              <p style="font-size:13px;color:var(--gray-400);margin-bottom:16px">Select which policy you'd like to pay the monthly premium for. Payment is processed via EcoCash or OneMoney — no need to visit our offices.</p>
+              <div id="payment-policies-list">
+                <div style="text-align:center;padding:24px;color:var(--gray-400)">⏳ Loading policies…</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Payment Form -->
+          <div class="section-card" id="premium-payment-card" style="display:none">
+            <div class="sc-header">
+              <div class="sc-title">💚 Pay via Mobile Money</div>
+              <button class="btn btn-outline btn-sm" onclick="cancelPremiumPay()">✕ Cancel</button>
+            </div>
+            <div class="sc-body">
+
+              <!-- Selected Policy Summary -->
+              <div style="background:var(--green-pale);border:1.5px solid var(--green-border);border-radius:10px;padding:16px;margin-bottom:20px">
+                <div style="font-size:12px;color:var(--gray-400);margin-bottom:4px">Paying for</div>
+                <div style="font-size:15px;font-weight:700;color:var(--green-dark)" id="prem-policy-name">—</div>
+                <div style="font-size:12px;color:var(--gray-400);margin-top:4px" id="prem-policy-vehicle">—</div>
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-top:12px;padding-top:12px;border-top:1px solid var(--green-border)">
+                  <span style="font-size:13px;color:var(--gray-600)">Monthly Premium Due</span>
+                  <span style="font-size:22px;font-weight:700;color:var(--green-dark)" id="prem-amount">USD —</span>
+                </div>
+              </div>
+
+              <!-- Provider Selection -->
+              <div style="font-size:13px;font-weight:600;color:var(--gray-700);margin-bottom:10px">Select Payment Method</div>
+              <div style="display:flex;gap:10px;margin-bottom:18px">
+                <button id="prem-ecocash-btn" onclick="selectPremProvider('ecocash')"
+                  style="flex:1;border:2px solid var(--green-border);background:white;color:var(--green-dark);font-weight:600;padding:12px;border-radius:10px;cursor:pointer;transition:all 0.2s;font-family:inherit">
+                  💚 EcoCash
+                </button>
+                <button id="prem-onemoney-btn" onclick="selectPremProvider('onemoney')"
+                  style="flex:1;border:2px solid var(--green-border);background:white;color:var(--green-dark);font-weight:600;padding:12px;border-radius:10px;cursor:pointer;transition:all 0.2s;font-family:inherit">
+                  🔵 OneMoney
+                </button>
+              </div>
+
+              <!-- Phone Number -->
+              <div class="form-group">
+                <label>Your Mobile Number *</label>
+                <div style="display:flex;gap:8px;align-items:center">
+                  <span style="font-size:13px;font-weight:600;color:var(--green-dark);background:var(--green-pale);border:1px solid var(--green-border);padding:10px 14px;border-radius:8px;white-space:nowrap">+263</span>
+                  <input type="tel" class="form-control" id="prem-phone" placeholder="77 000 0000" maxlength="9"/>
+                </div>
+                <div style="font-size:11px;color:var(--gray-400);margin-top:4px">You will receive a USSD prompt on this number to confirm payment.</div>
+              </div>
+
+              <!-- Payment Status -->
+              <div id="prem-pay-status" style="display:none;border-radius:10px;padding:14px;margin-bottom:16px;text-align:center;font-size:13px;font-weight:600"></div>
+
+              <!-- Payment History for this policy -->
+              <div id="prem-history" style="margin-bottom:18px;display:none">
+                <div style="font-size:13px;font-weight:700;color:var(--green-dark);margin-bottom:10px">Recent Payments</div>
+                <div id="prem-history-list"></div>
+              </div>
+
+              <button class="btn btn-green" id="prem-pay-btn" onclick="submitPremiumPayment()" style="width:100%;padding:14px;font-size:15px">
+                💚 Send Payment Request
+              </button>
+              <p style="font-size:11px;color:var(--gray-400);text-align:center;margin-top:8px">Approve the USSD prompt on your phone to complete payment. Receipt will be emailed to you.</p>
+            </div>
+          </div>
+
+          <!-- Payment History (All) -->
+          <div class="section-card">
+            <div class="sc-header"><div class="sc-title">🧾 Payment History</div></div>
+            <div class="sc-body">
+              <div id="all-payment-history">
+                <div style="text-align:center;padding:20px;color:var(--gray-400);font-size:13px">No payment history yet.</div>
+              </div>
+            </div>
+          </div>
+
+        </div>
+
+        <!-- ── SECURITY TAB ── -->
+        <div class="stab-panel" id="stab-security">
+          <div class="section-card">
+            <div class="sc-header"><div class="sc-title">🔒 Change Password</div></div>
+            <div class="sc-body pw-section">
+              <div class="form-group">
+                <label>Current Password *</label>
+                <input type="password" class="form-control" id="pw-current" placeholder="Enter current password"/>
+              </div>
+              <div class="form-group">
+                <label>New Password *</label>
+                <input type="password" class="form-control" id="pw-new" placeholder="Min. 8 characters"/>
+              </div>
+              <div class="form-group">
+                <label>Confirm New Password *</label>
+                <input type="password" class="form-control" id="pw-confirm" placeholder="Repeat new password"/>
+              </div>
+              <button class="btn btn-green" onclick="changePassword()" id="pw-btn">🔒 Update Password</button>
+            </div>
+          </div>
+
+          <div class="section-card">
+            <div class="sc-header"><div class="sc-title">📧 Email Verification</div></div>
+            <div class="sc-body">
+              <div style="display:flex;align-items:center;gap:12px;padding:12px;background:var(--green-pale);border-radius:10px">
+                <span style="font-size:24px" id="email-verified-icon">⏳</span>
+                <div>
+                  <div style="font-size:14px;font-weight:600;color:var(--green-dark)" id="email-verified-text">Checking…</div>
+                  <div style="font-size:12px;color:var(--gray-400)" id="email-verified-sub"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="{% static 'shared.js' %}"></script>
+{% verbatim %}
+<script>
+  renderLayout('profile');
+  renderTopbar('My Profile', 'Manage your personal details, vehicles and policies');
+
+  let myVehicles = [];
+  let myPolicies = [];
+
+  // ── INIT ──
+  async function init() {
+    const user = getUser();
+    await loadProfile(user);
+    await loadVehicles();
+    await loadPolicies();
+    await loadStats();
+    loadLicence();
+  }
+
+  // ── TAB SWITCHING ──
+  function switchStab(tab, btn) {
+    document.querySelectorAll('.stab').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    document.querySelectorAll('.stab-panel').forEach(p => p.classList.remove('active'));
+    document.getElementById('stab-' + tab).classList.add('active');
+  }
+
+  // ── LOAD PROFILE ──
+  async function loadProfile(user) {
+    try {
+      const res = await apiFetch('/profile/');
+      if (!res) return;
+      const data = await res.json();
+
+      const fullName = (data.first_name || '') + ' ' + (data.last_name || '');
+      const initials = ((data.first_name||'U')[0] + (data.last_name||'U')[0]).toUpperCase();
+
+      document.getElementById('avatar-initials').textContent  = initials;
+      document.getElementById('profile-fullname').textContent = fullName.trim() || 'Your Name';
+      document.getElementById('profile-email').textContent    = data.email || '';
+      document.getElementById('profile-role').textContent     = data.role || 'CLIENT';
+      document.getElementById('profile-joined').textContent   = 'Member since ' + formatDate(data.date_joined);
+
+      // Fill form
+      document.getElementById('pf-first').value   = data.first_name   || '';
+      document.getElementById('pf-last').value    = data.last_name    || '';
+      document.getElementById('pf-email').value   = data.email        || '';
+      document.getElementById('pf-phone').value   = data.phone_number || '';
+      document.getElementById('pf-dob').value     = data.date_of_birth|| '';
+      document.getElementById('pf-gender').value  = data.gender       || '';
+      document.getElementById('pf-nid').value     = data.national_id  || '';
+      document.getElementById('pf-address').value = data.address      || '';
+      document.getElementById('pf-city').value    = data.city         || '';
+
+      // Email verification
+      document.getElementById('email-verified-icon').textContent = data.is_email_verified ? '✅' : '⚠️';
+      document.getElementById('email-verified-text').textContent = data.is_email_verified ? 'Email Verified' : 'Email Not Verified';
+      document.getElementById('email-verified-sub').textContent  = data.is_email_verified ? 'Your email address has been verified.' : 'Please verify your email address.';
+
+    } catch(e) {}
+  }
+
+  // ── SAVE PROFILE ──
+  async function saveProfile() {
+    const btn = document.getElementById('save-profile-btn');
+    btn.textContent = '⏳ Saving…'; btn.disabled = true;
+    try {
+      const res = await apiFetch('/profile/', {
+        method: 'PATCH',
+        body: JSON.stringify({
+          first_name:   document.getElementById('pf-first').value,
+          last_name:    document.getElementById('pf-last').value,
+          phone_number: document.getElementById('pf-phone').value,
+          date_of_birth:document.getElementById('pf-dob').value || null,
+          gender:       document.getElementById('pf-gender').value,
+          national_id:  document.getElementById('pf-nid').value,
+          address:      document.getElementById('pf-address').value,
+          city:         document.getElementById('pf-city').value,
+        })
+      });
+      if (res && res.ok) {
+        const data = await res.json();
+        localStorage.setItem('user', JSON.stringify(data));
+        showToast('Profile updated successfully!');
+        loadProfile(data);
+      } else {
+        showToast('Failed to update profile', 'error');
+      }
+    } catch(e) { showToast('Connection error', 'error'); }
+    btn.textContent = '💾 Save Changes'; btn.disabled = false;
+  }
+
+  // ── LOAD STATS ──
+  async function loadStats() {
+    try {
+      const [cRes, vRes, pRes] = await Promise.all([
+        apiFetch('/claims/'),
+        apiFetch('/vehicles/'),
+        apiFetch('/policies/'),
+      ]);
+      if (cRes) {
+        const d = await cRes.json();
+        const claims = d.results || d;
+        document.getElementById('stat-claims').textContent  = claims.length;
+        document.getElementById('stat-settled').textContent = claims.filter(c => c.status === 'SETTLED').length;
+      }
+      if (vRes) {
+        const d = await vRes.json();
+        document.getElementById('stat-vehicles').textContent = (d.results || d).length;
+      }
+      if (pRes) {
+        const d = await pRes.json();
+        document.getElementById('stat-policies').textContent = (d.results || d).length;
+      }
+    } catch(e) {}
+  }
+
+  // ── VEHICLES ──
+  async function loadVehicles() {
+    try {
+      const res = await apiFetch('/vehicles/');
+      if (!res) return;
+      const data = await res.json();
+      myVehicles = data.results || data;
+      renderVehicles(myVehicles);
+    } catch(e) {}
+  }
+
+  function renderVehicles(vehicles) {
+    const grid = document.getElementById('vehicles-grid');
+    if (!vehicles.length) {
+      grid.innerHTML = '<div style="grid-column:1/-1;text-align:center;padding:32px;color:var(--gray-400)"><div style="font-size:40px;margin-bottom:8px">🚗</div><p style="font-size:14px">No vehicles registered yet</p></div>';
+      return;
+    }
+    grid.innerHTML = vehicles.map(v => `
+      <div class="vc">
+        <div class="vc-top">
+          <div class="vc-icon">🚗</div>
+          <button class="btn btn-danger btn-sm" onclick="deleteVehicle('${v.id}')">🗑️</button>
+        </div>
+        <div class="vc-name">${v.year} ${v.make} ${v.model}</div>
+        <div class="vc-plate">${v.license_plate}</div>
+        <div class="vc-grid">
+          <div class="vc-item"><div class="vi-lbl">Type</div><div class="vi-val">${v.body_type?.replace('_',' ')}</div></div>
+          <div class="vc-item"><div class="vi-lbl">Color</div><div class="vi-val">${v.color}</div></div>
+          <div class="vc-item"><div class="vi-lbl">VIN</div><div class="vi-val">${v.vin_number || '—'}</div></div>
+          <div class="vc-item"><div class="vi-lbl">Status</div><div class="vi-val" style="color:var(--green-main)">${v.is_active ? '✅ Active' : '❌'}</div></div>
+        </div>
+      </div>
+    `).join('');
+  }
+
+  function toggleForm(formId, btnId) {
+    const form = document.getElementById(formId);
+    const btn  = document.getElementById(btnId);
+    form.classList.toggle('show');
+    btn.style.display = form.classList.contains('show') ? 'none' : 'flex';
+  }
+
+  async function saveVehicle() {
+    const make  = document.getElementById('v-make').value.trim();
+    const model = document.getElementById('v-model').value.trim();
+    const year  = document.getElementById('v-year').value;
+    const plate = document.getElementById('v-plate').value.trim().toUpperCase();
+    const color = document.getElementById('v-color').value.trim();
+
+    if (!make)  { showToast('Please enter vehicle make', 'error'); return; }
+    if (!model) { showToast('Please enter vehicle model', 'error'); return; }
+    if (!year)  { showToast('Please enter vehicle year', 'error'); return; }
+    if (!plate) { showToast('Please enter license plate', 'error'); return; }
+    if (!color) { showToast('Please enter vehicle color', 'error'); return; }
+
+    const btn = document.getElementById('save-vehicle-btn');
+    btn.textContent = '⏳ Saving…'; btn.disabled = true;
+
+    try {
+      const res = await apiFetch('/vehicles/', {
+        method: 'POST',
+        body: JSON.stringify({
+          make, model, color,
+          year:          parseInt(year),
+          license_plate: plate,
+          body_type:     document.getElementById('v-body').value,
+          vin_number:    document.getElementById('v-vin').value,
+          engine_number: document.getElementById('v-engine').value,
+        })
+      });
+      const data = await res.json();
+      if (res.ok) {
+        showToast('Vehicle registered successfully!');
+        toggleForm('add-vehicle-form', 'add-vehicle-btn');
+        loadVehicles();
+        loadStats();
+      } else {
+        showToast(Object.values(data).flat().join(' ') || 'Failed to save', 'error');
+      }
+    } catch(e) { showToast('Connection error', 'error'); }
+    btn.textContent = '✅ Save Vehicle'; btn.disabled = false;
+  }
+
+  async function deleteVehicle(id) {
+    if (!confirm('Remove this vehicle from your profile?')) return;
+    try {
+      const res = await apiFetch('/vehicles/' + id + '/', { method: 'DELETE' });
+      if (res && (res.ok || res.status === 204)) {
+        showToast('Vehicle removed'); loadVehicles(); loadStats();
+      } else {
+        showToast('Cannot delete — vehicle has active policies or claims', 'error');
+      }
+    } catch(e) { showToast('Error', 'error'); }
+  }
+
+  // ── POLICIES ──
+  async function loadPolicies() {
+    try {
+      const res = await apiFetch('/policies/');
+      if (!res) return;
+      const data = await res.json();
+      myPolicies = data.results || data;
+      renderPolicies(myPolicies);
+      renderPaymentPolicies();
+    } catch(e) {}
+  }
+
+  function renderPolicies(policies) {
+    const container = document.getElementById('policies-list');
+    if (!policies.length) {
+      container.innerHTML = '<div style="text-align:center;padding:32px;color:var(--gray-400)"><div style="font-size:40px;margin-bottom:8px">📄</div><p style="font-size:14px">No policies added yet</p></div>';
+      return;
+    }
+    container.innerHTML = policies.map(p => {
+      const start   = new Date(p.start_date);
+      const end     = new Date(p.end_date);
+      const today   = new Date();
+      const pct     = Math.min(100, Math.max(0, ((today-start)/(end-start))*100)).toFixed(0);
+      const daysLeft= Math.max(0, Math.ceil((end-today)/86400000));
+      const barColor= daysLeft < 30 ? '#ef4444' : daysLeft < 90 ? '#f5c518' : 'var(--green-main)';
+      return `
+        <div class="pcf">
+          <div class="pcf-head">
+            <div class="pcf-icon">📄</div>
+            <div style="flex:1">
+              <div class="pcf-num">${p.policy_number}</div>
+              <div class="pcf-car">${p.vehicle_info ? p.vehicle_info.year+' '+p.vehicle_info.make+' '+p.vehicle_info.model+' ('+p.vehicle_info.license_plate+')' : '—'}</div>
+            </div>
+            <div style="display:flex;gap:6px;align-items:center">
+              ${statusBadge(p.status)}
+              <button class="btn btn-danger btn-sm" onclick="deletePolicy('${p.id}')">🗑️</button>
+            </div>
+          </div>
+          <div class="pcf-body">
+            <div class="pcf-grid">
+              <div class="pcf-item"><div class="pil">Cover Type</div><div class="piv">${p.cover_type?.replace(/_/g,' ')}</div></div>
+              <div class="pcf-item"><div class="pil">Sum Insured</div><div class="piv" style="color:var(--green-main)">${formatCurrency(p.sum_insured)}</div></div>
+              <div class="pcf-item"><div class="pil">Excess</div><div class="piv">${formatCurrency(p.excess_amount)}</div></div>
+              <div class="pcf-item"><div class="pil">Start Date</div><div class="piv">${formatDate(p.start_date)}</div></div>
+              <div class="pcf-item"><div class="pil">End Date</div><div class="piv">${formatDate(p.end_date)}</div></div>
+              <div class="pcf-item"><div class="pil">Days Left</div><div class="piv" style="color:${barColor}">${daysLeft} days</div></div>
+            </div>
+            <div class="expiry-row">
+              <div class="exp-lbl">Policy life</div>
+              <div class="exp-track"><div class="exp-fill" style="width:${pct}%;background:${barColor}"></div></div>
+              <div class="exp-lbl">${daysLeft} days left</div>
+            </div>
+          </div>
+        </div>
+      `;
+    }).join('');
+  }
+
+  function showAddPolicy() {
+    toggleForm('add-policy-form', 'add-policy-btn');
+    // load vehicles into policy select
+    const sel = document.getElementById('p-vehicle');
+    sel.innerHTML = '<option value="">— Select your vehicle —</option>';
+    myVehicles.forEach(v => {
+      sel.innerHTML += '<option value="' + v.id + '">' + v.year + ' ' + v.make + ' ' + v.model + ' (' + v.license_plate + ')</option>';
+    });
+    if (!myVehicles.length) {
+      sel.innerHTML = '<option value="">⚠️ No vehicles — add a vehicle first</option>';
+    }
+  }
+
+  async function savePolicy() {
+    const number  = document.getElementById('p-number').value.trim();
+    const vehicle = document.getElementById('p-vehicle').value;
+    const start   = document.getElementById('p-start').value;
+    const end     = document.getElementById('p-end').value;
+    const sum     = document.getElementById('p-sum').value;
+    const premium = document.getElementById('p-premium').value;
+
+    if (!number)  { showToast('Please enter policy number', 'error'); return; }
+    if (!vehicle) { showToast('Please select a vehicle', 'error'); return; }
+    if (!sum)     { showToast('Please enter sum insured', 'error'); return; }
+    if (!premium) { showToast('Please enter premium amount', 'error'); return; }
+    if (!start)   { showToast('Please select start date', 'error'); return; }
+    if (!end)     { showToast('Please select end date', 'error'); return; }
+    if (end <= start) { showToast('End date must be after start date', 'error'); return; }
+
+    const btn = document.getElementById('save-policy-btn');
+    btn.textContent = '⏳ Saving…'; btn.disabled = true;
+
+    try {
+      const res = await apiFetch('/policies/', {
+        method: 'POST',
+        body: JSON.stringify({
+          policy_number:  number,
+          vehicle:        vehicle,
+          cover_type:     document.getElementById('p-cover').value,
+          sum_insured:    parseFloat(sum),
+          premium_amount: parseFloat(premium),
+          excess_amount:  parseFloat(document.getElementById('p-excess').value || '0'),
+          start_date:     start,
+          end_date:       end,
+          status:         'ACTIVE',
+        })
+      });
+      const data = await res.json();
+      if (res.ok) {
+        showToast('Policy added successfully!');
+        toggleForm('add-policy-form', 'add-policy-btn');
+        loadPolicies(); loadStats();
+      } else {
+        showToast(Object.values(data).flat().join(' ') || 'Failed to save', 'error');
+      }
+    } catch(e) { showToast('Connection error', 'error'); }
+    btn.textContent = '✅ Save Policy'; btn.disabled = false;
+  }
+
+  async function deletePolicy(id) {
+    if (!confirm('Remove this policy from your profile?')) return;
+    try {
+      const res = await apiFetch('/policies/' + id + '/', { method: 'DELETE' });
+      if (res && (res.ok || res.status === 204)) {
+        showToast('Policy removed'); loadPolicies(); loadStats();
+      } else {
+        showToast('Cannot delete — policy has active claims', 'error');
+      }
+    } catch(e) { showToast('Error', 'error'); }
+  }
+
+  // ── LICENCE ──
+  function previewLicence(e) {
+    const file = e.target.files[0];
+    if (!file) return;
+    if (file.type.startsWith('image/')) {
+      const reader = new FileReader();
+      reader.onload = ev => {
+        const img = document.getElementById('licence-preview');
+        img.src = ev.target.result;
+        img.style.display = 'block';
+        document.getElementById('licence-zone').style.display = 'none';
+      };
+      reader.readAsDataURL(file);
+    }
+    showToast('Licence image loaded — fill in the details below and click Save');
+  }
+
+  function loadLicence() {
+    const saved = JSON.parse(localStorage.getItem('driver_licence') || '{}');
+    if (saved.number)    document.getElementById('lic-number').value    = saved.number;
+    if (saved.licClass)  document.getElementById('lic-class').value     = saved.licClass;
+    if (saved.issued)    document.getElementById('lic-issued').value    = saved.issued;
+    if (saved.expiry)    document.getElementById('lic-expiry').value    = saved.expiry;
+    if (saved.authority) document.getElementById('lic-authority').value = saved.authority;
+    if (saved.country)   document.getElementById('lic-country').value   = saved.country;
+  }
+
+  function saveLicence() {
+    const data = {
+      number:    document.getElementById('lic-number').value,
+      licClass:  document.getElementById('lic-class').value,
+      issued:    document.getElementById('lic-issued').value,
+      expiry:    document.getElementById('lic-expiry').value,
+      authority: document.getElementById('lic-authority').value,
+      country:   document.getElementById('lic-country').value,
+    };
+    if (!data.number) { showToast('Please enter licence number', 'error'); return; }
+    localStorage.setItem('driver_licence', JSON.stringify(data));
+    showToast('Driver\'s licence saved successfully!');
+  }
+
+  // ── CHANGE PASSWORD ──
+  async function changePassword() {
+    const current = document.getElementById('pw-current').value;
+    const newPw   = document.getElementById('pw-new').value;
+    const confirm = document.getElementById('pw-confirm').value;
+
+    if (!current) { showToast('Please enter current password', 'error'); return; }
+    if (!newPw)   { showToast('Please enter new password', 'error'); return; }
+    if (newPw.length < 8) { showToast('New password must be at least 8 characters', 'error'); return; }
+    if (newPw !== confirm) { showToast('Passwords do not match', 'error'); return; }
+
+    const btn = document.getElementById('pw-btn');
+    btn.textContent = '⏳ Updating…'; btn.disabled = true;
+
+    try {
+      const res = await apiFetch('/auth/change-password/', {
+        method: 'POST',
+        body: JSON.stringify({ old_password: current, new_password: newPw, confirm_new: confirm })
+      });
+      if (res && res.ok) {
+        showToast('Password updated successfully!');
+        document.getElementById('pw-current').value = '';
+        document.getElementById('pw-new').value     = '';
+        document.getElementById('pw-confirm').value = '';
+      } else {
+        const data = await res.json();
+        showToast(Object.values(data).flat().join(' ') || 'Failed to update password', 'error');
+      }
+    } catch(e) { showToast('Connection error', 'error'); }
+    btn.textContent = '🔒 Update Password'; btn.disabled = false;
+  }
+
+  // ── PREMIUM PAYMENT ──
+  let selectedPremProvider = null;
+  let selectedPolicyForPayment = null;
+  let paymentHistory = JSON.parse(localStorage.getItem('paymentHistory') || '[]');
+
+  function renderPaymentPolicies() {
+    const container = document.getElementById('payment-policies-list');
+    if (!myPolicies.length) {
+      container.innerHTML = '<div style="text-align:center;padding:24px;color:var(--gray-400);font-size:13px">No active policies found. Add a policy first.</div>';
+      return;
+    }
+    container.innerHTML = myPolicies.map(p => {
+      const monthly = p.premium_amount ? (parseFloat(p.premium_amount) / 12).toFixed(2) : '—';
+      const vehicle = (myVehicles.find(v => v.id === p.vehicle));
+      const vName = vehicle ? vehicle.year + ' ' + vehicle.make + ' ' + vehicle.model : 'Unknown Vehicle';
+      return `
+        <div style="border:1.5px solid var(--green-border);border-radius:10px;padding:16px;margin-bottom:12px;display:flex;justify-content:space-between;align-items:center;cursor:pointer;transition:all 0.2s" 
+             onmouseover="this.style.borderColor='var(--green-main)'" onmouseout="this.style.borderColor='var(--green-border)'"
+             onclick="selectPolicyToPay('${p.id}','${p.policy_number}','${vName}','${monthly}')">
+          <div>
+            <div style="font-size:14px;font-weight:700;color:var(--green-dark)">${p.policy_number}</div>
+            <div style="font-size:12px;color:var(--gray-400);margin-top:2px">${vName} · ${(p.cover_type||'').replace(/_/g,' ')}</div>
+          </div>
+          <div style="text-align:right">
+            <div style="font-size:18px;font-weight:700;color:var(--green-main)">USD ${monthly}</div>
+            <div style="font-size:11px;color:var(--gray-400)">per month</div>
+          </div>
+        </div>`;
+    }).join('');
+    renderAllPaymentHistory();
+  }
+
+  function selectPolicyToPay(id, number, vehicle, monthly) {
+    selectedPolicyForPayment = { id, number, vehicle, monthly };
+    document.getElementById('prem-policy-name').textContent = number;
+    document.getElementById('prem-policy-vehicle').textContent = vehicle;
+    document.getElementById('prem-amount').textContent = 'USD ' + monthly;
+    document.getElementById('premium-payment-card').style.display = 'block';
+    document.getElementById('prem-pay-status').style.display = 'none';
+    document.getElementById('prem-pay-btn').textContent = '💚 Send Payment Request';
+    document.getElementById('prem-pay-btn').disabled = false;
+    selectedPremProvider = null;
+    document.getElementById('prem-ecocash-btn').style.cssText = 'flex:1;border:2px solid var(--green-border);background:white;color:var(--green-dark);font-weight:600;padding:12px;border-radius:10px;cursor:pointer;transition:all 0.2s;font-family:inherit';
+    document.getElementById('prem-onemoney-btn').style.cssText = 'flex:1;border:2px solid var(--green-border);background:white;color:var(--green-dark);font-weight:600;padding:12px;border-radius:10px;cursor:pointer;transition:all 0.2s;font-family:inherit';
+    renderPolicyPaymentHistory(id);
+    document.getElementById('premium-payment-card').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+
+  function cancelPremiumPay() {
+    selectedPolicyForPayment = null;
+    document.getElementById('premium-payment-card').style.display = 'none';
+  }
+
+  function selectPremProvider(provider) {
+    selectedPremProvider = provider;
+    const active = 'border:2px solid var(--green-main);background:var(--green-pale);color:var(--green-dark);font-weight:700;padding:12px;border-radius:10px;cursor:pointer;transition:all 0.2s;font-family:inherit;flex:1';
+    const inactive = 'flex:1;border:2px solid var(--green-border);background:white;color:var(--green-dark);font-weight:600;padding:12px;border-radius:10px;cursor:pointer;transition:all 0.2s;font-family:inherit';
+    document.getElementById('prem-ecocash-btn').style.cssText = provider === 'ecocash' ? active : inactive;
+    document.getElementById('prem-onemoney-btn').style.cssText = provider === 'onemoney' ? active : inactive;
+  }
+
+  async function submitPremiumPayment() {
+    if (!selectedPremProvider) { showToast('Please select EcoCash or OneMoney', 'error'); return; }
+    const phone = document.getElementById('prem-phone').value.trim();
+    if (!phone || phone.replace(/\s/g,'').length < 8) { showToast('Please enter a valid mobile number', 'error'); return; }
+
+    const btn = document.getElementById('prem-pay-btn');
+    btn.textContent = '⏳ Sending request…'; btn.disabled = true;
+
+    const statusEl = document.getElementById('prem-pay-status');
+    statusEl.style.display = 'block';
+    statusEl.style.cssText = 'display:block;border-radius:10px;padding:14px;margin-bottom:16px;text-align:center;font-size:13px;font-weight:600;background:#fffbeb;border:1.5px solid #f59e0b;color:#92400e';
+    statusEl.textContent = '📱 USSD prompt sent to +263' + phone + '. Check your phone and approve the payment…';
+
+    // TODO: Replace with real EcoCash/OneMoney merchant API when account is ready
+    await new Promise(r => setTimeout(r, 3000));
+
+    // Record payment in history
+    const payment = {
+      id: Date.now(),
+      policyId: selectedPolicyForPayment.id,
+      policyNumber: selectedPolicyForPayment.number,
+      vehicle: selectedPolicyForPayment.vehicle,
+      amount: selectedPolicyForPayment.monthly,
+      provider: selectedPremProvider,
+      phone: '+263' + phone,
+      date: new Date().toISOString(),
+      status: 'Confirmed'
+    };
+    paymentHistory.unshift(payment);
+    localStorage.setItem('paymentHistory', JSON.stringify(paymentHistory));
+
+    statusEl.style.cssText = 'display:block;border-radius:10px;padding:14px;margin-bottom:16px;text-align:center;font-size:13px;font-weight:600;background:#f0fdf4;border:1.5px solid #22c55e;color:#15803d';
+    statusEl.textContent = '✅ Payment of USD ' + selectedPolicyForPayment.monthly + ' confirmed! Thank you.';
+    btn.textContent = '✅ Paid';
+    renderAllPaymentHistory();
+    renderPolicyPaymentHistory(selectedPolicyForPayment.id);
+  }
+
+  function renderPolicyPaymentHistory(policyId) {
+    const hist = paymentHistory.filter(p => p.policyId === policyId).slice(0, 3);
+    const container = document.getElementById('prem-history');
+    const list = document.getElementById('prem-history-list');
+    if (!hist.length) { container.style.display = 'none'; return; }
+    container.style.display = 'block';
+    list.innerHTML = hist.map(p =>
+      '<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--gray-100);font-size:13px">' +
+      '<div><span style="font-weight:600;color:var(--gray-800)">USD ' + p.amount + '</span>' +
+      '<span style="color:var(--gray-400);margin-left:8px">via ' + (p.provider === 'ecocash' ? 'EcoCash' : 'OneMoney') + '</span></div>' +
+      '<div style="text-align:right"><div style="color:#22c55e;font-weight:600">✅ ' + p.status + '</div>' +
+      '<div style="font-size:11px;color:var(--gray-400)">' + new Date(p.date).toLocaleDateString() + '</div></div></div>'
+    ).join('');
+  }
+
+  function renderAllPaymentHistory() {
+    const container = document.getElementById('all-payment-history');
+    if (!paymentHistory.length) {
+      container.innerHTML = '<div style="text-align:center;padding:20px;color:var(--gray-400);font-size:13px">No payment history yet.</div>';
+      return;
+    }
+    container.innerHTML = paymentHistory.slice(0, 10).map(p =>
+      '<div style="display:flex;justify-content:space-between;align-items:center;padding:12px 0;border-bottom:1px solid var(--gray-100)">' +
+      '<div><div style="font-size:13px;font-weight:600;color:var(--gray-800)">' + p.policyNumber + '</div>' +
+      '<div style="font-size:12px;color:var(--gray-400);margin-top:2px">' + p.vehicle + ' · via ' + (p.provider === 'ecocash' ? 'EcoCash 💚' : 'OneMoney 🔵') + '</div></div>' +
+      '<div style="text-align:right"><div style="font-size:15px;font-weight:700;color:var(--green-dark)">USD ' + p.amount + '</div>' +
+      '<div style="font-size:11px;color:#22c55e;font-weight:600">✅ ' + p.status + ' · ' + new Date(p.date).toLocaleDateString() + '</div></div></div>'
+    ).join('');
+  }
+
+  init();
+</script>
+{% endverbatim %}
+</body>
+</html>

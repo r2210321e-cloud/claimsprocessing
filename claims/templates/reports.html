@@ -1,0 +1,678 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Zimnat Insurance — Reports</title>
+{% load static %}
+<link rel="stylesheet" href="{% static 'shared.css' %}"/>
+<style>
+  .report-hero {
+    background: linear-gradient(135deg, var(--green-dark) 0%, var(--green-main) 100%);
+    border-radius: var(--radius);
+    padding: 28px 32px;
+    margin-bottom: 28px;
+    display: flex; align-items: center; justify-content: space-between;
+    position: relative; overflow: hidden;
+  }
+  .report-hero::after {
+    content: "📊";
+    position: absolute; right: 32px; top: 50%;
+    transform: translateY(-50%);
+    font-size: 80px; opacity: 0.1;
+  }
+  .report-hero h2 { font-family:"Playfair Display",serif; color:white; font-size:24px; margin-bottom:4px; }
+  .report-hero p  { color:rgba(255,255,255,0.7); font-size:14px; }
+
+  /* REPORT TYPE CARDS */
+  .report-types { display:grid; grid-template-columns:repeat(3,1fr); gap:18px; margin-bottom:28px; }
+  .rt-card {
+    background:white; border-radius:var(--radius);
+    border:1.5px solid var(--gray-200);
+    padding:22px; cursor:pointer;
+    transition:all 0.2s; text-align:center;
+  }
+  .rt-card:hover { border-color:var(--green-main); transform:translateY(-2px); box-shadow:var(--shadow-md); }
+  .rt-card.active { border-color:var(--green-main); background:var(--green-pale); box-shadow:var(--shadow-md); }
+  .rt-icon { font-size:32px; margin-bottom:10px; }
+  .rt-title { font-size:14px; font-weight:700; color:var(--green-dark); margin-bottom:4px; }
+  .rt-desc  { font-size:12px; color:var(--gray-400); line-height:1.5; }
+
+  /* FILTERS */
+  .filters-row {
+    display:flex; gap:12px; align-items:flex-end;
+    flex-wrap:wrap; margin-bottom:22px;
+    background:white; padding:20px 24px;
+    border-radius:var(--radius); border:1px solid var(--gray-200);
+  }
+  .filter-group { display:flex; flex-direction:column; gap:5px; }
+  .filter-group label { font-size:11px; font-weight:700; color:var(--green-dark); text-transform:uppercase; letter-spacing:0.5px; }
+  .filter-group select,
+  .filter-group input {
+    padding:9px 12px; border:1.5px solid var(--green-border);
+    border-radius:8px; font-family:"DM Sans",sans-serif;
+    font-size:13px; color:var(--gray-800); outline:none;
+    background:white; min-width:140px;
+  }
+  .filter-group select:focus,
+  .filter-group input:focus { border-color:var(--green-main); box-shadow:0 0 0 3px rgba(26,122,74,0.1); }
+
+  /* REPORT CONTENT AREA */
+  .report-area { display:grid; grid-template-columns:1fr 340px; gap:22px; }
+
+  /* REPORT TABLE */
+  .report-table-wrap { overflow-x:auto; }
+  .report-summary {
+    display:grid; grid-template-columns:repeat(3,1fr);
+    gap:14px; margin-bottom:20px;
+  }
+  .rs-item {
+    background:var(--green-pale); border-radius:10px;
+    padding:14px; text-align:center;
+    border:1px solid var(--green-border);
+  }
+  .rs-val { font-size:22px; font-weight:700; color:var(--green-dark); }
+  .rs-lbl { font-size:11px; color:var(--gray-400); margin-top:3px; font-weight:600; text-transform:uppercase; letter-spacing:0.5px; }
+
+  /* INDIVIDUAL REPORT CARD */
+  .report-card {
+    background:white; border-radius:var(--radius);
+    border:1px solid var(--gray-200); margin-bottom:14px;
+    overflow:hidden; transition:all 0.2s;
+    box-shadow:var(--shadow-sm);
+  }
+  .report-card:hover { box-shadow:var(--shadow-md); border-color:var(--green-border); }
+
+  .rc-header {
+    padding:16px 20px; display:flex;
+    align-items:center; gap:14px;
+    cursor:pointer;
+  }
+  .rc-icon {
+    width:44px; height:44px; border-radius:10px;
+    background:var(--green-pale); display:flex;
+    align-items:center; justify-content:center;
+    font-size:20px; flex-shrink:0;
+  }
+  .rc-info { flex:1; }
+  .rc-num  { font-size:14px; font-weight:700; color:var(--green-dark); }
+  .rc-meta { font-size:12px; color:var(--gray-400); margin-top:2px; }
+  .rc-right { display:flex; flex-direction:column; align-items:flex-end; gap:6px; flex-shrink:0; }
+
+  .rc-body {
+    display:none; padding:0 20px 20px;
+    animation:fadeIn 0.3s ease;
+  }
+  .rc-body.open { display:block; }
+  @keyframes fadeIn { from{opacity:0;transform:translateY(-4px)} to{opacity:1;transform:translateY(0)} }
+
+  /* REPORT DETAIL SECTIONS */
+  .rd-section { margin-bottom:18px; }
+  .rd-section-title {
+    font-size:11px; font-weight:700;
+    color:var(--gray-400); text-transform:uppercase;
+    letter-spacing:0.8px; margin-bottom:10px;
+    padding-bottom:6px; border-bottom:1px solid var(--gray-100);
+  }
+  .rd-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:12px; }
+  .rd-item .rd-label { font-size:11px; color:var(--gray-400); text-transform:uppercase; letter-spacing:0.3px; }
+  .rd-item .rd-val   { font-size:13px; font-weight:600; color:var(--gray-800); margin-top:2px; }
+
+  /* COST BREAKDOWN */
+  .cost-table { width:100%; border-collapse:collapse; }
+  .cost-table td { padding:8px 12px; font-size:13px; border-bottom:1px solid var(--gray-100); }
+  .cost-table tr:last-child td { border-bottom:none; font-weight:700; color:var(--green-dark); background:var(--green-pale); border-radius:8px; }
+  .cost-table .cost-label { color:var(--gray-600); }
+  .cost-table .cost-val   { text-align:right; font-weight:600; }
+
+  /* PRINT REPORT BUTTON */
+  .print-section {
+    background:var(--yellow-light); border:1.5px solid var(--yellow);
+    border-radius:10px; padding:14px 16px;
+    display:flex; align-items:center; justify-content:space-between;
+    margin-top:14px;
+  }
+  .print-section p { font-size:13px; color:var(--gray-600); }
+  .print-section strong { color:var(--green-dark); }
+
+  /* SIDEBAR PANEL */
+  .report-sidebar { display:flex; flex-direction:column; gap:18px; }
+
+  .quick-stat {
+    background:white; border-radius:var(--radius);
+    border:1px solid var(--gray-200); padding:20px;
+  }
+  .quick-stat h4 {
+    font-family:"Playfair Display",serif;
+    font-size:16px; color:var(--green-dark); margin-bottom:14px;
+  }
+  .qs-row {
+    display:flex; justify-content:space-between;
+    align-items:center; padding:9px 0;
+    border-bottom:1px solid var(--gray-100); font-size:13px;
+  }
+  .qs-row:last-child { border-bottom:none; }
+  .qs-label { color:var(--gray-600); }
+  .qs-val   { font-weight:700; color:var(--gray-800); }
+  .qs-val.green  { color:var(--green-main); }
+  .qs-val.yellow { color:#d97706; }
+  .qs-val.red    { color:#dc2626; }
+
+  /* CHART */
+  .mini-chart { margin-top:10px; }
+  .mc-bar { display:flex; align-items:center; gap:8px; margin-bottom:8px; }
+  .mc-label { width:80px; font-size:11px; color:var(--gray-600); text-align:right; flex-shrink:0; }
+  .mc-track { flex:1; height:8px; background:var(--gray-100); border-radius:4px; overflow:hidden; }
+  .mc-fill  { height:100%; border-radius:4px; transition:width 1s ease; }
+  .mc-val   { font-size:11px; color:var(--gray-600); font-weight:600; width:30px; }
+
+  /* EMPTY STATE */
+  .empty { text-align:center; padding:48px 20px; color:var(--gray-400); }
+  .empty .ei { font-size:48px; margin-bottom:12px; }
+  .empty h3  { font-size:16px; color:var(--gray-600); margin-bottom:6px; }
+
+  @media print {
+    .sidebar, .topbar, .report-types, .filters-row,
+    .report-sidebar, .btn, .print-section { display:none !important; }
+    .main-content { margin-right:0 !important; }
+    .report-area  { grid-template-columns:1fr !important; }
+    .rc-body      { display:block !important; }
+  }
+</style>
+</head>
+<body>
+<div class="main-content">
+  <div class="page-content">
+
+    <!-- HERO -->
+    <div class="report-hero">
+      <div>
+        <h2>Claims Reports</h2>
+        <p>View, generate and download detailed reports for all your submitted claims</p>
+        <button class="btn btn-yellow" style="margin-top:14px" onclick="printAllReports()">
+          🖨️ Print All Reports
+        </button>
+      </div>
+    </div>
+
+    <!-- REPORT TYPE SELECTOR -->
+    <div class="report-types">
+      <div class="rt-card active" id="rt-all" onclick="selectReportType('all',this)">
+        <div class="rt-icon">📋</div>
+        <div class="rt-title">All Claims Report</div>
+        <div class="rt-desc">Complete history of all submitted claims with full details</div>
+      </div>
+      <div class="rt-card" id="rt-damage" onclick="selectReportType('damage',this)">
+        <div class="rt-icon">🔧</div>
+        <div class="rt-title">Damage Assessment</div>
+        <div class="rt-desc">Detailed damage reports with estimated repair costs</div>
+      </div>
+      <div class="rt-card" id="rt-financial" onclick="selectReportType('financial',this)">
+        <div class="rt-icon">💰</div>
+        <div class="rt-title">Financial Summary</div>
+        <div class="rt-desc">Overview of claimed vs approved vs settled amounts</div>
+      </div>
+    </div>
+
+    <!-- FILTERS -->
+    <div class="filters-row">
+      <div class="filter-group">
+        <label>Status</label>
+        <select id="f-status" onchange="applyFilters()">
+          <option value="">All Statuses</option>
+          <option value="SUBMITTED">Submitted</option>
+          <option value="UNDER_REVIEW">Under Review</option>
+          <option value="APPROVED">Approved</option>
+          <option value="DECLINED">Declined</option>
+          <option value="SETTLED">Settled</option>
+        </select>
+      </div>
+      <div class="filter-group">
+        <label>Date From</label>
+        <input type="date" id="f-from" onchange="applyFilters()"/>
+      </div>
+      <div class="filter-group">
+        <label>Date To</label>
+        <input type="date" id="f-to" onchange="applyFilters()"/>
+      </div>
+      <div class="filter-group">
+        <label>Incident Type</label>
+        <select id="f-type" onchange="applyFilters()">
+          <option value="">All Types</option>
+          <option value="COLLISION">Collision</option>
+          <option value="THEFT">Theft</option>
+          <option value="FIRE">Fire</option>
+          <option value="FLOOD">Flood</option>
+          <option value="VANDALISM">Vandalism</option>
+          <option value="OTHER">Other</option>
+        </select>
+      </div>
+      <div class="filter-group">
+        <label>&nbsp;</label>
+        <button class="btn btn-outline btn-sm" onclick="clearFilters()">✕ Clear</button>
+      </div>
+      <div style="margin-left:auto">
+        <div class="filter-group">
+          <label>&nbsp;</label>
+          <button class="btn btn-green btn-sm" onclick="exportCSV()">⬇️ Export CSV</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- MAIN AREA -->
+    <div class="report-area">
+
+      <!-- LEFT: REPORTS LIST -->
+      <div>
+        <!-- SUMMARY ROW -->
+        <div class="report-summary" id="report-summary">
+          <div class="rs-item"><div class="rs-val" id="rs-total">—</div><div class="rs-lbl">Total Claims</div></div>
+          <div class="rs-item"><div class="rs-val" id="rs-amount">—</div><div class="rs-lbl">Total Claimed</div></div>
+          <div class="rs-item"><div class="rs-val" id="rs-settled">—</div><div class="rs-lbl">Total Settled</div></div>
+        </div>
+
+        <!-- REPORT CARDS -->
+        <div id="reports-list">
+          <div class="empty"><div class="ei">⏳</div><p>Loading reports…</p></div>
+        </div>
+      </div>
+
+      <!-- RIGHT: SIDEBAR STATS -->
+      <div class="report-sidebar">
+
+        <!-- Quick Stats -->
+        <div class="quick-stat">
+          <h4>📈 Claims Overview</h4>
+          <div id="overview-stats">
+            <div class="qs-row"><div class="qs-label">Total Claims</div><div class="qs-val" id="ov-total">—</div></div>
+            <div class="qs-row"><div class="qs-label">Approved</div><div class="qs-val green" id="ov-approved">—</div></div>
+            <div class="qs-row"><div class="qs-label">Declined</div><div class="qs-val red" id="ov-declined">—</div></div>
+            <div class="qs-row"><div class="qs-label">Pending</div><div class="qs-val yellow" id="ov-pending">—</div></div>
+            <div class="qs-row"><div class="qs-label">Settled</div><div class="qs-val green" id="ov-settled">—</div></div>
+          </div>
+        </div>
+
+        <!-- Financial Summary -->
+        <div class="quick-stat">
+          <h4>💵 Financial Summary</h4>
+          <div class="qs-row"><div class="qs-label">Total Claimed</div><div class="qs-val" id="fin-claimed">—</div></div>
+          <div class="qs-row"><div class="qs-label">Total Approved</div><div class="qs-val green" id="fin-approved">—</div></div>
+          <div class="qs-row"><div class="qs-label">Total Settled</div><div class="qs-val green" id="fin-settled">—</div></div>
+          <div class="qs-row"><div class="qs-label">Avg Claim Value</div><div class="qs-val" id="fin-avg">—</div></div>
+        </div>
+
+        <!-- Claims by Type Chart -->
+        <div class="quick-stat">
+          <h4>🚗 Claims by Type</h4>
+          <div class="mini-chart" id="type-chart"></div>
+        </div>
+
+        <!-- Processing Time -->
+        <div class="quick-stat">
+          <h4>⏱️ Processing Time</h4>
+          <div class="qs-row"><div class="qs-label">Avg Processing</div><div class="qs-val" id="pt-avg">—</div></div>
+          <div class="qs-row"><div class="qs-label">Fastest</div><div class="qs-val green" id="pt-fast">—</div></div>
+          <div class="qs-row"><div class="qs-label">Slowest</div><div class="qs-val yellow" id="pt-slow">—</div></div>
+        </div>
+
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script src="{% static 'shared.js' %}"></script>
+<script>
+  renderLayout("reports");
+  renderTopbar("Reports", "Claims history & financial summaries");
+
+  let allClaims = [];
+  let filteredClaims = [];
+  let currentType = "all";
+
+  async function loadReports() {
+    try {
+      const res = await apiFetch("/claims/?ordering=-created_at");
+      if (!res) return;
+      const data = await res.json();
+      allClaims = data.results || data;
+      filteredClaims = [...allClaims];
+      renderAll();
+    } catch(e) {
+      document.getElementById("reports-list").innerHTML =
+        '<div class="empty"><div class="ei">⚠️</div><p>Failed to load reports</p></div>';
+    }
+  }
+
+  function renderAll() {
+    renderSummary(filteredClaims);
+    renderReportCards(filteredClaims);
+    renderSidebarStats(allClaims);
+    renderTypeChart(allClaims);
+  }
+
+  function selectReportType(type, el) {
+    currentType = type;
+    document.querySelectorAll(".rt-card").forEach(c => c.classList.remove("active"));
+    el.classList.add("active");
+    applyFilters();
+  }
+
+  function applyFilters() {
+    const status = document.getElementById("f-status").value;
+    const from   = document.getElementById("f-from").value;
+    const to     = document.getElementById("f-to").value;
+    const type   = document.getElementById("f-type").value;
+
+    filteredClaims = allClaims.filter(c => {
+      if (status && c.status !== status) return false;
+      if (type   && c.incident_type !== type) return false;
+      if (from   && c.incident_date < from) return false;
+      if (to     && c.incident_date > to)   return false;
+      if (currentType === "damage"    && !c.ai_estimated_repair && !(c.assessments||[]).length) return false;
+      if (currentType === "financial" && !["APPROVED","SETTLED"].includes(c.status)) return false;
+      return true;
+    });
+    renderAll();
+  }
+
+  function clearFilters() {
+    document.getElementById("f-status").value = "";
+    document.getElementById("f-from").value   = "";
+    document.getElementById("f-to").value     = "";
+    document.getElementById("f-type").value   = "";
+    filteredClaims = [...allClaims];
+    renderAll();
+  }
+
+  function renderSummary(claims) {
+    const totalClaimed  = claims.reduce((s,c) => s + parseFloat(c.claimed_amount||0), 0);
+    const totalSettled  = claims.reduce((s,c) => s + parseFloat(c.settlement_amount||0), 0);
+    document.getElementById("rs-total").textContent   = claims.length;
+    document.getElementById("rs-amount").textContent  = "USD " + totalClaimed.toLocaleString("en-US",{minimumFractionDigits:2});
+    document.getElementById("rs-settled").textContent = "USD " + totalSettled.toLocaleString("en-US",{minimumFractionDigits:2});
+  }
+
+  function renderSidebarStats(claims) {
+    const approved = claims.filter(c => c.status === "APPROVED").length;
+    const declined = claims.filter(c => c.status === "DECLINED").length;
+    const pending  = claims.filter(c => ["SUBMITTED","UNDER_REVIEW"].includes(c.status)).length;
+    const settled  = claims.filter(c => c.status === "SETTLED").length;
+    const totalClaimed  = claims.reduce((s,c) => s + parseFloat(c.claimed_amount||0), 0);
+    const totalApproved = claims.reduce((s,c) => s + parseFloat(c.approved_amount||0), 0);
+    const totalSettled  = claims.reduce((s,c) => s + parseFloat(c.settlement_amount||0), 0);
+    const avg = claims.length ? totalClaimed / claims.length : 0;
+
+    document.getElementById("ov-total").textContent    = claims.length;
+    document.getElementById("ov-approved").textContent = approved;
+    document.getElementById("ov-declined").textContent = declined;
+    document.getElementById("ov-pending").textContent  = pending;
+    document.getElementById("ov-settled").textContent  = settled;
+
+    document.getElementById("fin-claimed").textContent  = "USD " + totalClaimed.toLocaleString("en-US",{minimumFractionDigits:2});
+    document.getElementById("fin-approved").textContent = "USD " + totalApproved.toLocaleString("en-US",{minimumFractionDigits:2});
+    document.getElementById("fin-settled").textContent  = "USD " + totalSettled.toLocaleString("en-US",{minimumFractionDigits:2});
+    document.getElementById("fin-avg").textContent      = "USD " + avg.toLocaleString("en-US",{minimumFractionDigits:2});
+
+    // Processing time
+    const processed = claims.filter(c => c.submitted_at && c.decided_at);
+    if (processed.length) {
+      const days = processed.map(c => Math.ceil((new Date(c.decided_at) - new Date(c.submitted_at)) / 86400000));
+      const avg  = (days.reduce((a,b) => a+b, 0) / days.length).toFixed(1);
+      document.getElementById("pt-avg").textContent  = avg + " days";
+      document.getElementById("pt-fast").textContent = Math.min(...days) + " days";
+      document.getElementById("pt-slow").textContent = Math.max(...days) + " days";
+    } else {
+      document.getElementById("pt-avg").textContent  = "—";
+      document.getElementById("pt-fast").textContent = "—";
+      document.getElementById("pt-slow").textContent = "—";
+    }
+  }
+
+  function renderTypeChart(claims) {
+    const types = { COLLISION:"💥 Collision", THEFT:"🔓 Theft", FIRE:"🔥 Fire", FLOOD:"🌊 Flood", VANDALISM:"🪨 Vandal", OTHER:"📋 Other" };
+    const colors = { COLLISION:"#1a7a4a", THEFT:"#f5c518", FIRE:"#ef4444", FLOOD:"#3b82f6", VANDALISM:"#8b5cf6", OTHER:"#9ca3af" };
+    const counts = {};
+    claims.forEach(c => { counts[c.incident_type] = (counts[c.incident_type]||0) + 1; });
+    const max = Math.max(...Object.values(counts), 1);
+    const chart = document.getElementById("type-chart");
+    chart.innerHTML = Object.entries(counts).map(([type, count]) => `
+      <div class="mc-bar">
+        <div class="mc-label">${types[type]||type}</div>
+        <div class="mc-track">
+          <div class="mc-fill" style="width:${(count/max)*100}%;background:${colors[type]||"#9ca3af"}"></div>
+        </div>
+        <div class="mc-val">${count}</div>
+      </div>
+    `).join("") || '<div style="font-size:13px;color:var(--gray-400);text-align:center;padding:12px 0">No data yet</div>';
+  }
+
+  function renderReportCards(claims) {
+    const container = document.getElementById("reports-list");
+    if (!claims.length) {
+      container.innerHTML = '<div class="empty"><div class="ei">📭</div><h3>No reports found</h3><p>Try adjusting your filters</p></div>';
+      return;
+    }
+    container.innerHTML = claims.map(c => buildReportCard(c)).join("");
+  }
+
+  function buildReportCard(c) {
+    const icons = { COLLISION:"💥",THEFT:"🔓",FIRE:"🔥",FLOOD:"🌊",VANDALISM:"🪨",OTHER:"📋",DRAFT:"📝",SUBMITTED:"📤",UNDER_REVIEW:"🔍",APPROVED:"✅",DECLINED:"❌",SETTLED:"💰" };
+    return `
+      <div class="report-card" id="rc-${c.id}">
+        <div class="rc-header" onclick="toggleReport('${c.id}')">
+          <div class="rc-icon">${icons[c.incident_type]||"📋"}</div>
+          <div class="rc-info">
+            <div class="rc-num">${c.claim_number}</div>
+            <div class="rc-meta">${c.incident_type?.replace(/_/g," ")} · ${formatDate(c.incident_date)} · ${c.incident_location||"—"}</div>
+          </div>
+          <div class="rc-right">
+            ${statusBadge(c.status)}
+            <span style="font-size:12px;color:var(--gray-400)">${formatCurrency(c.claimed_amount)}</span>
+          </div>
+          <span style="color:var(--gray-400);font-size:18px;margin-left:12px;transition:transform 0.2s" id="arr-${c.id}">›</span>
+        </div>
+
+        <div class="rc-body" id="rb-${c.id}">
+          <div style="border-top:1px solid var(--gray-100);padding-top:16px">
+
+            <!-- INCIDENT -->
+            <div class="rd-section">
+              <div class="rd-section-title">📍 Incident Details</div>
+              <div class="rd-grid">
+                <div class="rd-item"><div class="rd-label">Claim Number</div><div class="rd-val">${c.claim_number}</div></div>
+                <div class="rd-item"><div class="rd-label">Incident Date</div><div class="rd-val">${formatDate(c.incident_date)}</div></div>
+                <div class="rd-item"><div class="rd-label">Incident Type</div><div class="rd-val">${c.incident_type?.replace(/_/g," ")||"—"}</div></div>
+                <div class="rd-item"><div class="rd-label">Location</div><div class="rd-val">${c.incident_location||"—"}</div></div>
+                <div class="rd-item"><div class="rd-label">Fault</div><div class="rd-val">${c.fault_type?.replace(/_/g," ")||"—"}</div></div>
+                <div class="rd-item"><div class="rd-label">Police Report</div><div class="rd-val">${c.police_report_filed ? "Yes — "+( c.police_report_number||"") : "No"}</div></div>
+              </div>
+              ${c.incident_description ? `<div style="margin-top:10px;background:var(--gray-50);padding:12px;border-radius:8px;font-size:13px;color:var(--gray-600);line-height:1.6">${c.incident_description}</div>` : ""}
+            </div>
+
+            <!-- VEHICLE -->
+            <div class="rd-section">
+              <div class="rd-section-title">🚗 Vehicle & Policy</div>
+              <div class="rd-grid">
+                <div class="rd-item"><div class="rd-label">Vehicle</div><div class="rd-val">${c.vehicle_info ? c.vehicle_info.year+" "+c.vehicle_info.make+" "+c.vehicle_info.model : "—"}</div></div>
+                <div class="rd-item"><div class="rd-label">License Plate</div><div class="rd-val">${c.vehicle_info?.license_plate||"—"}</div></div>
+                <div class="rd-item"><div class="rd-label">Policy Number</div><div class="rd-val">${c.policy_info?.policy_number||"—"}</div></div>
+                <div class="rd-item"><div class="rd-label">Cover Type</div><div class="rd-val">${c.policy_info?.cover_type?.replace(/_/g," ")||"—"}</div></div>
+                <div class="rd-item"><div class="rd-label">Sum Insured</div><div class="rd-val">${formatCurrency(c.policy_info?.sum_insured)}</div></div>
+                <div class="rd-item"><div class="rd-label">Excess Amount</div><div class="rd-val">${formatCurrency(c.policy_info?.excess_amount)}</div></div>
+              </div>
+            </div>
+
+            <!-- FINANCIAL -->
+            <div class="rd-section">
+              <div class="rd-section-title">💵 Financial Breakdown</div>
+              <table class="cost-table">
+                <tr><td class="cost-label">Amount Claimed by Client</td><td class="cost-val">${formatCurrency(c.claimed_amount)}</td></tr>
+                <tr><td class="cost-label">AI Estimated Repair Cost</td><td class="cost-val">${formatCurrency(c.ai_estimated_repair)}</td></tr>
+                <tr><td class="cost-label">Amount Approved by Insurer</td><td class="cost-val">${formatCurrency(c.approved_amount)}</td></tr>
+                <tr><td class="cost-label">Excess / Deductible Applied</td><td class="cost-val">${formatCurrency(c.excess_applied)}</td></tr>
+                <tr><td class="cost-label"><strong>Final Settlement Amount</strong></td><td class="cost-val"><strong>${formatCurrency(c.settlement_amount)}</strong></td></tr>
+              </table>
+            </div>
+
+            <!-- AI ASSESSMENT -->
+            ${c.ai_damage_summary ? `
+            <div class="rd-section">
+              <div class="rd-section-title">🤖 AI Damage Assessment</div>
+              <div style="background:var(--green-pale);border:1px solid var(--green-border);border-radius:8px;padding:12px;font-size:13px;color:var(--green-dark);line-height:1.6">
+                ${c.ai_damage_summary}
+              </div>
+              ${c.ai_fraud_score != null ? `
+                <div style="margin-top:8px;display:flex;align-items:center;gap:8px;font-size:12px;font-weight:600;color:${c.ai_fraud_score < 0.3 ? "var(--green-main)" : c.ai_fraud_score < 0.7 ? "#d97706" : "#dc2626"}">
+                  🔍 Fraud Risk Score: ${(c.ai_fraud_score*100).toFixed(0)}% — ${c.ai_fraud_score < 0.3 ? "Low Risk" : c.ai_fraud_score < 0.7 ? "Medium Risk" : "High Risk"}
+                </div>` : ""}
+            </div>` : ""}
+
+            <!-- TIMELINE -->
+            <div class="rd-section">
+              <div class="rd-section-title">📅 Claim Timeline</div>
+              <div class="timeline">
+                ${[
+                  ["Claim Submitted",    c.submitted_at,  "done"],
+                  ["Under Review",       c.reviewed_at,   c.reviewed_at ? "done" : "pending"],
+                  ["Decision Made",      c.decided_at,    c.decided_at  ? (c.status==="DECLINED"?"declined":"done") : "pending"],
+                  ["Settled",            c.settled_at,    c.settled_at  ? "done" : "pending"],
+                ].map(([label, date, state]) => `
+                  <div class="timeline-item">
+                    <div class="timeline-dot ${state === "pending" ? "pending" : state === "declined" ? "" : ""}"></div>
+                    <div class="timeline-date">${date ? formatDate(date) : "Pending"}</div>
+                    <div class="timeline-title">${label}</div>
+                  </div>
+                `).join("")}
+              </div>
+            </div>
+
+            <!-- ADJUSTER NOTES -->
+            ${c.adjuster_notes ? `
+            <div class="rd-section">
+              <div class="rd-section-title">📝 Adjuster Notes</div>
+              <div style="background:var(--gray-50);border-radius:8px;padding:12px;font-size:13px;color:var(--gray-600);line-height:1.6">${c.adjuster_notes}</div>
+            </div>` : ""}
+
+            ${c.status === "DECLINED" && c.decline_reason ? `
+            <div class="rd-section">
+              <div class="rd-section-title">❌ Decline Reason</div>
+              <div style="background:#fef2f2;border:1px solid #fecaca;border-radius:8px;padding:12px;font-size:13px;color:#dc2626;line-height:1.6">${c.decline_reason}</div>
+            </div>` : ""}
+
+            <!-- PRINT -->
+            <div class="print-section">
+              <p>Generate a <strong>PDF report</strong> for claim <strong>${c.claim_number}</strong></p>
+              <div style="display:flex;gap:8px">
+                <button class="btn btn-outline btn-sm" onclick="printReport('${c.id}','${c.claim_number}')">🖨️ Print</button>
+                <button class="btn btn-green btn-sm" onclick="downloadReport('${c.id}')">⬇️ Download</button>
+              </div>
+            </div>
+
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  function toggleReport(id) {
+    const body  = document.getElementById("rb-"+id);
+    const arrow = document.getElementById("arr-"+id);
+    const open  = body.classList.contains("open");
+    body.classList.toggle("open");
+    arrow.style.transform = open ? "rotate(0deg)" : "rotate(90deg)";
+  }
+
+  async function downloadReport(claimId) {
+    showToast("Generating report…");
+    try {
+      const res = await apiFetch("/claims/"+claimId+"/report/");
+      if (res && res.ok) {
+        const data = await res.json();
+        const content = formatReportText(data);
+        const blob = new Blob([content], { type:"text/plain" });
+        const a = document.createElement("a");
+        a.href = URL.createObjectURL(blob);
+        a.download = "claim-"+data.claim_number+"-report.txt";
+        a.click();
+        showToast("Report downloaded successfully!");
+      }
+    } catch(e) { showToast("Download failed","error"); }
+  }
+
+  function formatReportText(d) {
+    return `ZIMNAT INSURANCE — CLAIM REPORT
+=====================================
+Claim Number   : ${d.claim_number}
+Client         : ${d.client_name}
+Policy         : ${d.policy_number}
+Vehicle        : ${d.vehicle}
+Status         : ${d.status}
+
+INCIDENT DETAILS
+----------------
+Date           : ${d.incident_date}
+Type           : ${d.incident_type}
+Location       : ${d.incident_location}
+
+FINANCIAL SUMMARY
+-----------------
+Claimed Amount : ${d.claimed_amount || "—"}
+Approved Amount: ${d.approved_amount || "—"}
+Settlement     : ${d.settlement_amount || "—"}
+Est. Repair    : ${d.estimated_repair || "—"}
+
+DAMAGE ASSESSMENT
+-----------------
+${d.damage_description || "Not yet assessed"}
+
+ADJUSTER NOTES
+--------------
+${d.adjuster_notes || "None"}
+
+Submitted : ${d.submitted_at || "—"}
+Decided   : ${d.decided_at   || "—"}
+=====================================
+Generated by Zimnat Insurance Claims Portal
+`;
+  }
+
+  function printReport(id, num) {
+    showToast("Preparing print for "+num+"…");
+    setTimeout(() => window.print(), 500);
+  }
+
+  function printAllReports() {
+    showToast("Preparing all reports for print…");
+    document.querySelectorAll(".rc-body").forEach(b => b.classList.add("open"));
+    setTimeout(() => window.print(), 600);
+  }
+
+  function exportCSV() {
+    if (!filteredClaims.length) { showToast("No claims to export","error"); return; }
+    const headers = ["Claim Number","Client","Incident Date","Type","Location","Status","Claimed Amount","Approved Amount","Settlement","Submitted Date"];
+    const rows = filteredClaims.map(c => [
+      c.claim_number,
+      c.client_info?.full_name || getUser().first_name+" "+getUser().last_name,
+      c.incident_date,
+      c.incident_type?.replace(/_/g," "),
+      c.incident_location,
+      c.status,
+      c.claimed_amount || "0",
+      c.approved_amount || "0",
+      c.settlement_amount || "0",
+      c.submitted_at ? new Date(c.submitted_at).toLocaleDateString() : "—"
+    ]);
+    const csv = [headers, ...rows].map(r => r.map(v => `"${v||""}"`).join(",")).join("\n");
+    const blob = new Blob([csv], { type:"text/csv" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = "zimnat-claims-report.csv";
+    a.click();
+    showToast("CSV exported successfully!");
+  }
+
+  loadReports();
+</script>
+</body>
+</html>

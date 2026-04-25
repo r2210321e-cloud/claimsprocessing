@@ -1,0 +1,569 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Zimnat Insurance — Adjuster Dashboard</title>
+{% load static %}
+<link rel="stylesheet" href="{% static 'shared.css' %}"/>
+<style>
+  .stats-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:14px; margin-bottom:24px; }
+  .stat-card {
+    background:white; border:1px solid var(--gray-200);
+    border-radius:12px; padding:18px 20px;
+    display:flex; align-items:center; gap:14px;
+  }
+  .stat-icon { font-size:28px; }
+  .stat-num  { font-size:26px; font-weight:700; color:var(--green-dark); line-height:1; }
+  .stat-lbl  { font-size:12px; color:var(--gray-400); margin-top:3px; }
+
+  .claim-row {
+    display:grid;
+    grid-template-columns: 2fr 1fr 1fr 1fr 1fr 120px;
+    align-items:center;
+    padding:14px 16px;
+    border-bottom:1px solid var(--gray-100);
+    gap:12px;
+    cursor:pointer;
+    transition:background 0.15s;
+  }
+  .claim-row:hover { background:var(--green-pale); }
+  .claim-row.header {
+    font-size:11px; font-weight:700; color:var(--gray-400);
+    text-transform:uppercase; letter-spacing:0.5px;
+    cursor:default; background:none;
+  }
+  .claim-row.header:hover { background:none; }
+
+  .claim-num  { font-weight:700; color:var(--green-dark); font-size:14px; }
+  .claim-meta { font-size:12px; color:var(--gray-400); margin-top:2px; }
+
+  /* Severity badge */
+  .sev { display:inline-block; padding:2px 10px; border-radius:20px; font-size:11px; font-weight:700; }
+  .sev-MINOR     { background:#dcfce7; color:#15803d; }
+  .sev-MODERATE  { background:#fef9c3; color:#854d0e; }
+  .sev-SEVERE    { background:#fee2e2; color:#b91c1c; }
+  .sev-TOTAL_LOSS{ background:#fdf4ff; color:#7e22ce; }
+
+  /* Centered modal */
+  .detail-modal {
+    display:none;
+    position:fixed; inset:0; z-index:900;
+    align-items:center; justify-content:center;
+    padding:24px;
+  }
+  .detail-modal.open { display:flex; }
+
+  .modal-overlay {
+    position:fixed; inset:0;
+    background:rgba(0,0,0,0.45);
+    z-index:899;
+    display:none;
+  }
+  .modal-overlay.open { display:block; }
+
+  .modal-box {
+    background:white;
+    border-radius:16px;
+    width:100%; max-width:700px;
+    max-height:90vh;
+    display:flex; flex-direction:column;
+    overflow:hidden;
+    box-shadow:0 24px 60px rgba(0,0,0,0.25);
+    z-index:900;
+    position:relative;
+  }
+
+  .modal-header {
+    padding:20px 24px; border-bottom:1px solid var(--gray-200);
+    display:flex; justify-content:space-between; align-items:center;
+    background:var(--green-pale); flex-shrink:0;
+  }
+  .modal-body { flex:1; overflow-y:auto; padding:24px; }
+  .modal-footer {
+    padding:16px 24px; border-top:1px solid var(--gray-200);
+    background:white; flex-shrink:0;
+  }
+
+  .info-grid { display:grid; grid-template-columns:1fr 1fr; gap:14px; margin-bottom:20px; }
+  .info-item .il { font-size:11px; color:var(--gray-400); text-transform:uppercase; letter-spacing:0.4px; font-weight:700; }
+  .info-item .iv { font-size:13px; color:var(--gray-800); font-weight:500; margin-top:3px; }
+
+  .section-title {
+    font-size:12px; font-weight:700; color:var(--green-dark);
+    text-transform:uppercase; letter-spacing:0.5px;
+    margin:20px 0 10px; padding-bottom:6px;
+    border-bottom:1px solid var(--green-border);
+  }
+
+  .ai-box {
+    background:var(--green-pale); border:1.5px solid var(--green-border);
+    border-radius:10px; padding:14px; margin-bottom:16px;
+  }
+  .damage-row {
+    display:flex; align-items:center; gap:8px;
+    padding:6px 0; border-bottom:1px solid var(--green-border);
+    font-size:13px;
+  }
+  .dot { width:7px; height:7px; border-radius:50%; flex-shrink:0; }
+
+  .decision-btn {
+    flex:1; padding:12px; border:none; border-radius:10px;
+    font-size:14px; font-weight:700; cursor:pointer;
+    font-family:'DM Sans',sans-serif; transition:all 0.2s;
+  }
+  .btn-approve { background:#16a34a; color:white; }
+  .btn-approve:hover { background:#15803d; }
+  .btn-decline { background:#ef4444; color:white; }
+  .btn-decline:hover { background:#dc2626; }
+  .btn-approve:disabled, .btn-decline:disabled { opacity:0.5; cursor:not-allowed; }
+
+  .decision-form { display:none; margin-top:14px; }
+  .decision-form.show { display:block; }
+
+  .filter-row { display:flex; gap:10px; margin-bottom:16px; flex-wrap:wrap; align-items:center; }
+  .filter-btn {
+    padding:6px 16px; border-radius:20px; border:1.5px solid var(--green-border);
+    background:white; font-size:12px; font-weight:600; cursor:pointer;
+    color:var(--gray-600); font-family:'DM Sans',sans-serif; transition:all 0.2s;
+  }
+  .filter-btn:hover  { border-color:var(--green-main); color:var(--green-main); }
+  .filter-btn.active { background:var(--green-main); border-color:var(--green-main); color:white; }
+  .search-wrap {
+    margin-left:auto; display:flex; align-items:center; gap:8px;
+    border:1.5px solid var(--green-border); border-radius:20px;
+    padding:6px 14px; background:white;
+  }
+  .search-wrap input { border:none; outline:none; font-size:13px; width:160px; font-family:'DM Sans',sans-serif; }
+</style>
+</head>
+<body>
+<div class="main-content">
+  <div class="page-content">
+
+    <!-- Stats -->
+    <div class="stats-grid" id="stats-grid">
+      <div class="stat-card"><div class="stat-icon">📋</div><div><div class="stat-num" id="s-total">—</div><div class="stat-lbl">Total Assigned</div></div></div>
+      <div class="stat-card"><div class="stat-icon">🔍</div><div><div class="stat-num" id="s-pending">—</div><div class="stat-lbl">Pending Review</div></div></div>
+      <div class="stat-card"><div class="stat-icon">✅</div><div><div class="stat-num" id="s-approved">—</div><div class="stat-lbl">Approved</div></div></div>
+      <div class="stat-card"><div class="stat-icon">❌</div><div><div class="stat-num" id="s-declined">—</div><div class="stat-lbl">Declined</div></div></div>
+    </div>
+
+    <div class="card">
+      <div class="card-body">
+
+        <!-- Filters -->
+        <div class="filter-row">
+          <button class="filter-btn active" onclick="setFilter('ALL',this)">All</button>
+          <button class="filter-btn" onclick="setFilter('SUBMITTED',this)">Submitted</button>
+          <button class="filter-btn" onclick="setFilter('UNDER_REVIEW',this)">Under Review</button>
+          <button class="filter-btn" onclick="setFilter('APPROVED',this)">Approved</button>
+          <button class="filter-btn" onclick="setFilter('DECLINED',this)">Declined</button>
+          <div class="search-wrap">
+            <span>🔍</span>
+            <input type="text" placeholder="Search claim or plate…" oninput="setSearch(this.value)"/>
+          </div>
+        </div>
+
+        <!-- Table header -->
+        <div class="claim-row header">
+          <div>Claim</div>
+          <div>Client</div>
+          <div>Incident</div>
+          <div>AI Estimate</div>
+          <div>Status</div>
+          <div>Action</div>
+        </div>
+
+        <!-- Claims list -->
+        <div id="claims-list">
+          <div style="text-align:center;padding:50px;color:var(--gray-400)">⏳ Loading claims…</div>
+        </div>
+
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- Centered modal -->
+<div class="modal-overlay" id="overlay" onclick="closePanel()"></div>
+<div class="detail-modal" id="detail-panel">
+  <div class="modal-box">
+
+    <div class="modal-header">
+      <div>
+        <div style="font-family:'Playfair Display',serif;font-size:18px;color:var(--green-dark)" id="panel-claim-num">—</div>
+        <div style="font-size:12px;color:var(--gray-500);margin-top:2px" id="panel-status-badge">—</div>
+      </div>
+      <button onclick="closePanel()" style="background:none;border:none;font-size:22px;cursor:pointer;color:var(--gray-400)">✕</button>
+    </div>
+
+    <div class="modal-body" id="panel-body">
+      <div style="text-align:center;padding:40px;color:var(--gray-400)">Loading…</div>
+    </div>
+
+    <div class="modal-footer" id="panel-footer" style="display:none">
+      <div style="display:flex;gap:10px">
+        <button class="decision-btn btn-approve" id="btn-approve" onclick="showDecisionForm('APPROVED')">✅ Approve Claim</button>
+        <button class="decision-btn btn-decline" id="btn-decline" onclick="showDecisionForm('DECLINED')">❌ Decline Claim</button>
+      </div>
+
+      <!-- Approve form -->
+      <div class="decision-form" id="approve-form">
+        <div class="form-group" style="margin-top:14px">
+          <label>Approved Amount (USD) *</label>
+          <input type="number" class="form-control" id="approved-amount" placeholder="0.00" min="0" step="0.01"/>
+        </div>
+        <div class="form-group">
+          <label>Adjuster Notes</label>
+          <textarea class="form-control" id="approve-notes" rows="2" placeholder="Optional internal notes…"></textarea>
+        </div>
+        <div style="display:flex;gap:8px;margin-top:8px">
+          <button class="btn btn-outline btn-sm" onclick="hideDecisionForms()">Cancel</button>
+          <button class="btn btn-green" id="confirm-approve-btn" onclick="submitDecision('APPROVED')">✅ Confirm Approval</button>
+        </div>
+      </div>
+
+      <!-- Decline form -->
+      <div class="decision-form" id="decline-form">
+        <div class="form-group" style="margin-top:14px">
+          <label>Reason for Declining *</label>
+          <textarea class="form-control" id="decline-reason" rows="3" placeholder="Explain why this claim is being declined…"></textarea>
+        </div>
+        <div class="form-group">
+          <label>Adjuster Notes</label>
+          <textarea class="form-control" id="decline-notes" rows="2" placeholder="Optional internal notes…"></textarea>
+        </div>
+        <div style="display:flex;gap:8px;margin-top:8px">
+          <button class="btn btn-outline btn-sm" onclick="hideDecisionForms()">Cancel</button>
+          <button class="btn btn-green" style="background:#ef4444;border-color:#ef4444" id="confirm-decline-btn" onclick="submitDecision('DECLINED')">❌ Confirm Decline</button>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script src="{% static 'shared.js' %}"></script>
+{% verbatim %}
+<script>
+  renderLayout('adjuster');
+  renderTopbar('Adjuster Dashboard', 'Review and decide on assigned claims');
+
+  let allClaims = [];
+  let currentFilter = 'ALL';
+  let currentSearch = '';
+  let activeClaim = null;
+
+  const STATUS_COLORS = {
+    SUBMITTED:    '#3b82f6', UNDER_REVIEW: '#f59e0b',
+    APPROVED:     '#22c55e', DECLINED:     '#ef4444',
+    SETTLED:      '#8b5cf6', DRAFT:        '#9ca3af',
+  };
+  const SEV_COLORS = { Minor:'#22c55e', Moderate:'#f59e0b', Severe:'#ef4444', MINOR:'#22c55e', MODERATE:'#f59e0b', SEVERE:'#ef4444', TOTAL_LOSS:'#7f1d1d' };
+
+  async function loadDashboard() {
+    try {
+      const [dashRes, claimsRes] = await Promise.all([
+        apiFetch('/adjuster/dashboard/'),
+        apiFetch('/adjuster/claims/')
+      ]);
+
+      if (dashRes && dashRes.ok) {
+        const d = await dashRes.json();
+        document.getElementById('s-total').textContent   = d.stats?.total_assigned    ?? 0;
+        document.getElementById('s-pending').textContent = d.stats?.pending_review    ?? 0;
+        document.getElementById('s-approved').textContent= d.stats?.approved          ?? 0;
+        document.getElementById('s-declined').textContent= d.stats?.declined          ?? 0;
+      }
+
+      if (claimsRes && claimsRes.ok) {
+        const data = await claimsRes.json();
+        allClaims = data.results || data;
+        renderClaims();
+      }
+    } catch(e) {
+      document.getElementById('claims-list').innerHTML =
+        '<div style="text-align:center;padding:40px;color:#ef4444">⚠️ Failed to load claims</div>';
+    }
+  }
+
+  function setFilter(f, btn) {
+    currentFilter = f;
+    document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    renderClaims();
+  }
+
+  function setSearch(v) {
+    currentSearch = v.toLowerCase();
+    renderClaims();
+  }
+
+  function getFiltered() {
+    return allClaims.filter(c => {
+      const matchFilter = currentFilter === 'ALL' || c.status === currentFilter;
+      const matchSearch = !currentSearch ||
+        (c.claim_number||'').toLowerCase().includes(currentSearch) ||
+        (c.vehicle?.license_plate||'').toLowerCase().includes(currentSearch) ||
+        (c.client_name||'').toLowerCase().includes(currentSearch);
+      return matchFilter && matchSearch;
+    });
+  }
+
+  function renderClaims() {
+    const list = document.getElementById('claims-list');
+    const claims = getFiltered();
+    if (!claims.length) {
+      list.innerHTML = '<div style="text-align:center;padding:50px;color:var(--gray-400)">📋 No claims found</div>';
+      return;
+    }
+
+    list.innerHTML = claims.map(c => {
+      const color = STATUS_COLORS[c.status] || '#9ca3af';
+      const estimate = c.ai_estimated_repair
+        ? 'USD ' + parseFloat(c.ai_estimated_repair).toLocaleString()
+        : c.claimed_amount
+          ? 'USD ' + parseFloat(c.claimed_amount).toLocaleString()
+          : '—';
+      const canDecide = ['SUBMITTED','UNDER_REVIEW'].includes(c.status);
+
+      return `<div class="claim-row" onclick="openClaim('${c.id}')">
+        <div>
+          <div class="claim-num">${c.claim_number}</div>
+          <div class="claim-meta">${(c.incident_type||'').replace(/_/g,' ')} · ${c.incident_location||'—'}</div>
+        </div>
+        <div style="font-size:13px;color:var(--gray-700)">${c.client_name || c.client?.full_name || '—'}</div>
+        <div style="font-size:13px;color:var(--gray-600)">${formatDate(c.incident_date)}</div>
+        <div style="font-size:13px;font-weight:600;color:var(--green-dark)">${estimate}</div>
+        <div>
+          <span style="display:inline-block;padding:3px 10px;border-radius:20px;font-size:11px;font-weight:700;background:${color}22;color:${color};border:1px solid ${color}">
+            ${c.status?.replace(/_/g,' ')}
+          </span>
+        </div>
+        <div>
+          ${canDecide
+            ? `<button class="btn btn-green btn-sm" onclick="event.stopPropagation();openClaim('${c.id}')">Review →</button>`
+            : `<span style="font-size:12px;color:var(--gray-400)">Decided</span>`
+          }
+        </div>
+      </div>`;
+    }).join('');
+  }
+
+  function formatDate(d) {
+    if (!d) return '—';
+    return new Date(d).toLocaleDateString('en-GB', { day:'2-digit', month:'short', year:'numeric' });
+  }
+
+  async function openClaim(claimId) {
+    document.getElementById('detail-panel').classList.add('open');
+    document.getElementById('overlay').classList.add('open');
+    document.getElementById('panel-body').innerHTML = '<div style="text-align:center;padding:40px;color:var(--gray-400)">⏳ Loading…</div>';
+    document.getElementById('panel-footer').style.display = 'none';
+    hideDecisionForms();
+
+    try {
+      const [claimRes, assessRes] = await Promise.all([
+        apiFetch(`/claims/${claimId}/`),
+        apiFetch(`/claims/${claimId}/assessments/`)
+      ]);
+
+      const claim = await claimRes.json();
+      const assessData = await assessRes.json();
+      const assessments = assessData.results || assessData;
+      const aiAssessment = assessments.find(a => a.assessment_type === 'AI_INITIAL');
+
+      activeClaim = claim;
+
+      const color = STATUS_COLORS[claim.status] || '#9ca3af';
+      document.getElementById('panel-claim-num').textContent = claim.claim_number;
+      document.getElementById('panel-status-badge').innerHTML =
+        `<span style="background:${color}22;color:${color};padding:2px 10px;border-radius:10px;font-weight:700;font-size:11px">${claim.status?.replace(/_/g,' ')}</span>`;
+
+      // Build panel body
+      let html = `
+        <div class="section-title">📋 Incident Details</div>
+        <div class="info-grid">
+          <div class="info-item"><div class="il">Type</div><div class="iv">${(claim.incident_type||'').replace(/_/g,' ')}</div></div>
+          <div class="info-item"><div class="il">Date</div><div class="iv">${formatDate(claim.incident_date)}</div></div>
+          <div class="info-item"><div class="il">Location</div><div class="iv">${claim.incident_location||'—'}</div></div>
+          <div class="info-item"><div class="il">Fault</div><div class="iv">${(claim.fault_type||'').replace(/_/g,' ')}</div></div>
+          <div class="info-item"><div class="il">Police Report</div><div class="iv">${claim.police_report_filed ? 'Yes — '+claim.police_report_number : 'No'}</div></div>
+          <div class="info-item"><div class="il">Injuries</div><div class="iv">${claim.injuries_reported ? 'Yes' : 'No'}</div></div>
+        </div>
+        <div style="background:var(--gray-50);border-radius:8px;padding:12px;font-size:13px;color:var(--gray-700);margin-bottom:16px;border:1px solid var(--gray-100)">
+          <strong>Description:</strong> ${claim.incident_description||'—'}
+        </div>
+
+        <div class="section-title">🚗 Vehicle</div>
+        <div class="info-grid">
+          <div class="info-item"><div class="il">Vehicle</div><div class="iv">${claim.vehicle?.year||''} ${claim.vehicle?.make||''} ${claim.vehicle?.model||''}</div></div>
+          <div class="info-item"><div class="il">Plate</div><div class="iv">${claim.vehicle?.license_plate||'—'}</div></div>
+          <div class="info-item"><div class="il">Colour</div><div class="iv">${claim.vehicle?.color||'—'}</div></div>
+          <div class="info-item"><div class="il">Body Type</div><div class="iv">${claim.vehicle?.body_type||'—'}</div></div>
+        </div>
+
+        <div class="section-title">📄 Policy & Amounts</div>
+        <div class="info-grid">
+          <div class="info-item"><div class="il">Policy</div><div class="iv">${claim.policy?.policy_number||'—'}</div></div>
+          <div class="info-item"><div class="il">Cover</div><div class="iv">${(claim.policy?.cover_type||'').replace(/_/g,' ')}</div></div>
+          <div class="info-item"><div class="il">Sum Insured</div><div class="iv">USD ${parseFloat(claim.policy?.sum_insured||0).toLocaleString()}</div></div>
+          <div class="info-item"><div class="il">Excess</div><div class="iv">USD ${parseFloat(claim.policy?.excess_amount||0).toLocaleString()}</div></div>
+          <div class="info-item"><div class="il">Claimed Amount</div><div class="iv">${claim.claimed_amount ? 'USD '+parseFloat(claim.claimed_amount).toLocaleString() : '—'}</div></div>
+          <div class="info-item"><div class="il">Client</div><div class="iv">${claim.client?.full_name||claim.client_name||'—'}</div></div>
+        </div>`;
+
+      // AI Assessment section
+      if (aiAssessment) {
+        const sc = {MINOR:'#22c55e',MODERATE:'#f59e0b',SEVERE:'#ef4444',TOTAL_LOSS:'#7f1d1d'};
+        const sevLabel = {MINOR:'Minor',MODERATE:'Moderate',SEVERE:'Severe',TOTAL_LOSS:'Total Loss'};
+        const aColor = sc[aiAssessment.damage_severity] || '#aaa';
+        const damages = aiAssessment.damaged_parts || [];
+
+        html += `
+          <div class="section-title">🤖 AI Damage Assessment</div>
+          <div class="ai-box">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+              <div style="font-size:13px;color:var(--gray-600)">${aiAssessment.damage_description||''}</div>
+              <span style="font-size:11px;font-weight:700;padding:3px 10px;border-radius:20px;background:${aColor}22;color:${aColor};border:1px solid ${aColor};white-space:nowrap;margin-left:8px">
+                ${sevLabel[aiAssessment.damage_severity]||aiAssessment.damage_severity}
+              </span>
+            </div>
+            ${damages.map(d => {
+              const dColor = SEV_COLORS[d.severity] || '#aaa';
+              return `<div class="damage-row">
+                <div class="dot" style="background:${dColor}"></div>
+                <div style="flex:1">
+                  <span style="font-weight:600">${d.part}</span>
+                  <span style="font-size:11px;color:${dColor};margin-left:6px;background:${dColor}22;padding:1px 7px;border-radius:10px">${d.severity}</span>
+                  <div style="font-size:11px;color:var(--gray-400);margin-top:1px">${d.description||''}</div>
+                </div>
+                ${d.cost_usd ? `<span style="font-weight:600;font-size:13px">USD ${parseFloat(d.cost_usd).toLocaleString()}</span>` : ''}
+              </div>`;
+            }).join('')}
+            <div style="background:var(--green-dark);color:white;border-radius:8px;padding:10px 14px;display:flex;justify-content:space-between;margin-top:12px">
+              <span style="font-size:13px;font-weight:600">Total AI Estimate</span>
+              <span style="font-size:16px;font-weight:700">USD ${parseFloat(aiAssessment.total_estimate||0).toLocaleString()}</span>
+            </div>
+          </div>`;
+      } else {
+        html += `
+          <div class="section-title">🤖 AI Damage Assessment</div>
+          <div style="background:#fff5f5;border:1px solid #fca5a5;border-radius:8px;padding:12px;font-size:13px;color:#dc2626;margin-bottom:16px">
+            No AI assessment available for this claim.
+          </div>`;
+      }
+
+      // Previous decision
+      if (claim.status === 'APPROVED') {
+        html += `
+          <div class="section-title">✅ Decision</div>
+          <div style="background:#f0fdf4;border:1px solid #86efac;border-radius:8px;padding:14px;font-size:13px">
+            <div><strong>Approved Amount:</strong> USD ${parseFloat(claim.approved_amount||0).toLocaleString()}</div>
+            <div style="margin-top:4px"><strong>Settlement:</strong> USD ${parseFloat(claim.settlement_amount||0).toLocaleString()}</div>
+            ${claim.adjuster_notes ? `<div style="margin-top:8px;color:var(--gray-600)">${claim.adjuster_notes}</div>` : ''}
+          </div>`;
+      } else if (claim.status === 'DECLINED') {
+        html += `
+          <div class="section-title">❌ Decision</div>
+          <div style="background:#fef2f2;border:1px solid #fca5a5;border-radius:8px;padding:14px;font-size:13px">
+            <div><strong>Reason:</strong> ${claim.decline_reason||'—'}</div>
+            ${claim.adjuster_notes ? `<div style="margin-top:8px;color:var(--gray-600)">${claim.adjuster_notes}</div>` : ''}
+          </div>`;
+      }
+
+      document.getElementById('panel-body').innerHTML = html;
+
+      // Show decision buttons only for decidable claims
+      const canDecide = ['SUBMITTED','UNDER_REVIEW'].includes(claim.status);
+      document.getElementById('panel-footer').style.display = canDecide ? 'block' : 'none';
+
+    } catch(e) {
+      document.getElementById('panel-body').innerHTML =
+        '<div style="text-align:center;padding:40px;color:#ef4444">⚠️ Failed to load claim details</div>';
+    }
+  }
+
+  function closePanel() {
+    document.getElementById('detail-panel').classList.remove('open');
+    document.getElementById('overlay').classList.remove('open');
+    activeClaim = null;
+    hideDecisionForms();
+  }
+
+  function showDecisionForm(type) {
+    hideDecisionForms();
+    document.getElementById(type === 'APPROVED' ? 'approve-form' : 'decline-form').classList.add('show');
+    document.getElementById('btn-approve').disabled = true;
+    document.getElementById('btn-decline').disabled = true;
+  }
+
+  function hideDecisionForms() {
+    document.getElementById('approve-form').classList.remove('show');
+    document.getElementById('decline-form').classList.remove('show');
+    document.getElementById('btn-approve').disabled = false;
+    document.getElementById('btn-decline').disabled = false;
+  }
+
+  async function submitDecision(decision) {
+    if (!activeClaim) return;
+
+    const btnId = decision === 'APPROVED' ? 'confirm-approve-btn' : 'confirm-decline-btn';
+    const btn = document.getElementById(btnId);
+    btn.textContent = '⏳ Saving…'; btn.disabled = true;
+
+    const payload = { decision };
+
+    if (decision === 'APPROVED') {
+      const amt = parseFloat(document.getElementById('approved-amount').value);
+      if (!amt || amt <= 0) {
+        showToast('Please enter the approved amount.', 'error');
+        btn.textContent = '✅ Confirm Approval'; btn.disabled = false;
+        return;
+      }
+      payload.approved_amount = amt;
+      payload.adjuster_notes  = document.getElementById('approve-notes').value;
+    } else {
+      const reason = document.getElementById('decline-reason').value.trim();
+      if (!reason) {
+        showToast('Please provide a reason for declining.', 'error');
+        btn.textContent = '❌ Confirm Decline'; btn.disabled = false;
+        return;
+      }
+      payload.decline_reason  = reason;
+      payload.adjuster_notes  = document.getElementById('decline-notes').value;
+    }
+
+    try {
+      const res = await apiFetch(`/claims/${activeClaim.id}/decision/`, {
+        method: 'POST',
+        body: JSON.stringify(payload)
+      });
+      const data = await res.json();
+
+      if (res.ok) {
+        // Update local list
+        const idx = allClaims.findIndex(c => c.id === activeClaim.id);
+        if (idx !== -1) allClaims[idx].status = data.status;
+        renderClaims();
+        closePanel();
+        showToast(`Claim ${decision === 'APPROVED' ? 'approved' : 'declined'} successfully! Client has been notified.`);
+        loadDashboard(); // refresh stats
+      } else {
+        showToast(Object.values(data).flat().join(' ') || 'Decision failed.', 'error');
+        btn.disabled = false;
+        btn.textContent = decision === 'APPROVED' ? '✅ Confirm Approval' : '❌ Confirm Decline';
+      }
+    } catch(e) {
+      showToast('Connection error. Please try again.', 'error');
+      btn.disabled = false;
+    }
+  }
+
+  loadDashboard();
+</script>
+{% endverbatim %}
+</body>
+</html>

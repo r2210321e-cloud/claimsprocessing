@@ -1,0 +1,450 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Zimnat Insurance — Manage Users</title>
+{% load static %}
+<link rel="stylesheet" href="{% static 'shared.css' %}"/>
+<style>
+  .role-badge {
+    display: inline-block;
+    padding: 3px 10px;
+    border-radius: 20px;
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+  .role-CLIENT   { background:#e0f2fe; color:#0369a1; }
+  .role-ADJUSTER { background:#f0fdf4; color:#15803d; }
+  .role-GARAGE   { background:#fef9c3; color:#854d0e; }
+  .role-ADMIN    { background:#fdf4ff; color:#7e22ce; }
+
+  .status-dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    display: inline-block;
+    margin-right: 5px;
+  }
+  .dot-active   { background: #22c55e; }
+  .dot-inactive { background: #ef4444; }
+
+  .user-table { width: 100%; border-collapse: collapse; }
+  .user-table th {
+    text-align: left;
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--gray-400);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    padding: 10px 14px;
+    border-bottom: 2px solid var(--gray-100);
+  }
+  .user-table td {
+    padding: 12px 14px;
+    font-size: 13px;
+    color: var(--gray-700);
+    border-bottom: 1px solid var(--gray-100);
+    vertical-align: middle;
+  }
+  .user-table tr:hover td { background: var(--green-pale); }
+
+  .action-btn {
+    border: none;
+    background: none;
+    cursor: pointer;
+    padding: 4px 8px;
+    border-radius: 6px;
+    font-size: 12px;
+    font-weight: 600;
+    transition: all 0.15s;
+  }
+  .btn-deactivate { color: #f59e0b; background: #fffbeb; }
+  .btn-deactivate:hover { background: #fef3c7; }
+  .btn-activate   { color: #22c55e; background: #f0fdf4; }
+  .btn-activate:hover { background: #dcfce7; }
+  .btn-delete     { color: #ef4444; background: #fef2f2; }
+  .btn-delete:hover { background: #fee2e2; }
+
+  .modal-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.45);
+    z-index: 1000;
+    align-items: center;
+    justify-content: center;
+  }
+  .modal-overlay.open { display: flex; }
+  .modal-box {
+    background: white;
+    border-radius: 16px;
+    padding: 32px;
+    width: 100%;
+    max-width: 480px;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.2);
+    animation: popIn 0.2s ease;
+  }
+  @keyframes popIn { from{opacity:0;transform:scale(0.95)} to{opacity:1;transform:scale(1)} }
+  .modal-title {
+    font-family: 'Playfair Display', serif;
+    font-size: 20px;
+    color: var(--green-dark);
+    margin-bottom: 6px;
+  }
+  .modal-sub { font-size: 13px; color: var(--gray-400); margin-bottom: 24px; }
+
+  .tabs { display: flex; gap: 0; margin-bottom: 24px; border-bottom: 2px solid var(--gray-100); }
+  .tab-btn {
+    padding: 10px 20px;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--gray-400);
+    background: none;
+    border: none;
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+    margin-bottom: -2px;
+    transition: all 0.2s;
+    font-family: 'DM Sans', sans-serif;
+  }
+  .tab-btn.active { color: var(--green-dark); border-bottom-color: var(--green-main); }
+  .tab-btn:hover { color: var(--green-dark); }
+
+  .stats-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-bottom: 24px; }
+  .stat-card {
+    background: white;
+    border: 1px solid var(--gray-200);
+    border-radius: 12px;
+    padding: 16px;
+    text-align: center;
+  }
+  .stat-num { font-size: 28px; font-weight: 700; color: var(--green-dark); }
+  .stat-lbl { font-size: 12px; color: var(--gray-400); margin-top: 4px; }
+
+  .search-bar {
+    display: flex; gap: 10px; margin-bottom: 16px; align-items: center;
+  }
+  .search-input {
+    flex: 1;
+    padding: 9px 14px;
+    border: 1.5px solid var(--green-border);
+    border-radius: 10px;
+    font-size: 13px;
+    font-family: 'DM Sans', sans-serif;
+    outline: none;
+  }
+  .search-input:focus { border-color: var(--green-main); }
+</style>
+</head>
+<body>
+<div class="main-content">
+  <div class="page-content">
+
+    <!-- Stats -->
+    <div class="stats-row" id="stats-row">
+      <div class="stat-card"><div class="stat-num" id="stat-all">—</div><div class="stat-lbl">Total Users</div></div>
+      <div class="stat-card"><div class="stat-num" id="stat-adj">—</div><div class="stat-lbl">Adjusters</div></div>
+      <div class="stat-card"><div class="stat-num" id="stat-gar">—</div><div class="stat-lbl">Garages</div></div>
+      <div class="stat-card"><div class="stat-num" id="stat-cli">—</div><div class="stat-lbl">Clients</div></div>
+    </div>
+
+    <div class="card">
+      <div class="card-body">
+
+        <!-- Tabs + Add button -->
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+          <div class="tabs">
+            <button class="tab-btn active" onclick="switchTab('ALL',this)">All Users</button>
+            <button class="tab-btn" onclick="switchTab('ADJUSTER',this)">Adjusters</button>
+            <button class="tab-btn" onclick="switchTab('GARAGE',this)">Garages</button>
+            <button class="tab-btn" onclick="switchTab('CLIENT',this)">Clients</button>
+          </div>
+          <button class="btn btn-green btn-sm" onclick="openModal()">➕ Add User</button>
+        </div>
+
+        <!-- Search -->
+        <div class="search-bar">
+          <input class="search-input" id="search-input" placeholder="🔍  Search by name or email…" oninput="filterTable(this.value)"/>
+        </div>
+
+        <!-- Table -->
+        <div style="overflow-x:auto">
+          <table class="user-table">
+            <thead>
+              <tr>
+                <th>Name</th>
+                <th>Email</th>
+                <th>Role</th>
+                <th>Phone</th>
+                <th>Status</th>
+                <th>Joined</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="user-tbody">
+              <tr><td colspan="7" style="text-align:center;padding:40px;color:var(--gray-400)">⏳ Loading users…</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- Add User Modal -->
+<div class="modal-overlay" id="modal">
+  <div class="modal-box">
+    <div class="modal-title">➕ Create New User</div>
+    <div class="modal-sub">Create an Adjuster or Garage account. They will receive a welcome email.</div>
+
+    <div class="form-grid-2">
+      <div class="form-group">
+        <label>First Name *</label>
+        <input type="text" class="form-control" id="m-first" placeholder="John"/>
+      </div>
+      <div class="form-group">
+        <label>Last Name *</label>
+        <input type="text" class="form-control" id="m-last" placeholder="Doe"/>
+      </div>
+    </div>
+
+    <div class="form-group">
+      <label>Email Address *</label>
+      <input type="email" class="form-control" id="m-email" placeholder="john.doe@example.com"/>
+    </div>
+
+    <div class="form-group">
+      <label>Phone Number</label>
+      <input type="tel" class="form-control" id="m-phone" placeholder="+263 77 000 0000"/>
+    </div>
+
+    <div class="form-group">
+      <label>Role *</label>
+      <select class="form-control" id="m-role">
+        <option value="">— Select role —</option>
+        <option value="ADJUSTER">Claims Adjuster</option>
+        <option value="GARAGE">Garage / Repairer</option>
+      </select>
+    </div>
+
+    <div class="form-group">
+      <label>Password *</label>
+      <input type="password" class="form-control" id="m-password" placeholder="Minimum 8 characters"/>
+    </div>
+
+    <div id="modal-error" style="display:none;background:#fef2f2;border:1px solid #fca5a5;border-radius:8px;padding:10px 14px;font-size:13px;color:#dc2626;margin-bottom:16px"></div>
+
+    <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:8px">
+      <button class="btn btn-outline" onclick="closeModal()">Cancel</button>
+      <button class="btn btn-green" id="modal-submit-btn" onclick="createUser()">Create Account</button>
+    </div>
+  </div>
+</div>
+
+<script src="{% static 'shared.js' %}"></script>
+{% verbatim %}
+<script>
+  renderLayout('users');
+  renderTopbar('Manage Users', 'Create and manage adjuster and garage accounts');
+
+  let allUsers = [];
+  let currentTab = 'ALL';
+
+  async function loadUsers() {
+    try {
+      const res = await apiFetch('/admin/users/');
+      if (!res || !res.ok) return;
+      allUsers = await res.json();
+      updateStats();
+      renderTable(getFiltered());
+    } catch(e) {
+      document.getElementById('user-tbody').innerHTML =
+        '<tr><td colspan="7" style="text-align:center;padding:40px;color:#ef4444">Failed to load users</td></tr>';
+    }
+  }
+
+  function updateStats() {
+    document.getElementById('stat-all').textContent = allUsers.length;
+    document.getElementById('stat-adj').textContent = allUsers.filter(u => u.role === 'ADJUSTER').length;
+    document.getElementById('stat-gar').textContent = allUsers.filter(u => u.role === 'GARAGE').length;
+    document.getElementById('stat-cli').textContent = allUsers.filter(u => u.role === 'CLIENT').length;
+  }
+
+  function getFiltered() {
+    const search = document.getElementById('search-input').value.toLowerCase();
+    return allUsers.filter(u => {
+      const matchTab = currentTab === 'ALL' || u.role === currentTab;
+      const matchSearch = !search ||
+        u.full_name.toLowerCase().includes(search) ||
+        u.email.toLowerCase().includes(search);
+      return matchTab && matchSearch;
+    });
+  }
+
+  function switchTab(role, btn) {
+    currentTab = role;
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    renderTable(getFiltered());
+  }
+
+  function filterTable(val) {
+    renderTable(getFiltered());
+  }
+
+  function renderTable(users) {
+    const tbody = document.getElementById('user-tbody');
+    if (!users.length) {
+      tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:40px;color:var(--gray-400)">No users found</td></tr>';
+      return;
+    }
+    tbody.innerHTML = users.map(u => `
+      <tr>
+        <td>
+          <div style="font-weight:600;color:var(--gray-800)">${u.full_name}</div>
+          <div style="font-size:11px;color:var(--gray-400)">${u.national_id || ''}</div>
+        </td>
+        <td>${u.email}</td>
+        <td><span class="role-badge role-${u.role}">${u.role}</span></td>
+        <td>${u.phone || '—'}</td>
+        <td>
+          <span class="status-dot ${u.is_active ? 'dot-active' : 'dot-inactive'}"></span>
+          ${u.is_active ? 'Active' : 'Inactive'}
+        </td>
+        <td>${formatDate(u.date_joined)}</td>
+        <td style="white-space:nowrap">
+          ${u.role !== 'CLIENT' && u.role !== 'ADMIN' ? `
+            <button class="action-btn ${u.is_active ? 'btn-deactivate' : 'btn-activate'}"
+              onclick="toggleActive('${u.id}', ${u.is_active})">
+              ${u.is_active ? '⏸ Deactivate' : '▶ Activate'}
+            </button>
+            <button class="action-btn btn-delete" onclick="deleteUser('${u.id}', '${u.full_name}')">
+              🗑 Delete
+            </button>
+          ` : '<span style="color:var(--gray-400);font-size:12px">—</span>'}
+        </td>
+      </tr>
+    `).join('');
+  }
+
+  function formatDate(d) {
+    if (!d) return '—';
+    return new Date(d).toLocaleDateString('en-GB', { day:'2-digit', month:'short', year:'numeric' });
+  }
+
+  async function toggleActive(userId, currentlyActive) {
+    if (!confirm(`Are you sure you want to ${currentlyActive ? 'deactivate' : 'activate'} this user?`)) return;
+    try {
+      const res = await apiFetch(`/admin/users/${userId}/`, {
+        method: 'PATCH',
+        body: JSON.stringify({ is_active: !currentlyActive })
+      });
+      if (res && res.ok) {
+        const updated = await res.json();
+        const idx = allUsers.findIndex(u => u.id === userId);
+        if (idx !== -1) allUsers[idx].is_active = updated.is_active;
+        renderTable(getFiltered());
+        showToast(`User ${updated.is_active ? 'activated' : 'deactivated'} successfully.`);
+      }
+    } catch(e) { showToast('Action failed', 'error'); }
+  }
+
+  async function deleteUser(userId, name) {
+    if (!confirm(`Permanently delete ${name}? This cannot be undone.`)) return;
+    try {
+      const res = await apiFetch(`/admin/users/${userId}/`, { method: 'DELETE' });
+      if (res && res.status === 204) {
+        allUsers = allUsers.filter(u => u.id !== userId);
+        updateStats();
+        renderTable(getFiltered());
+        showToast(`${name} deleted.`);
+      }
+    } catch(e) { showToast('Delete failed', 'error'); }
+  }
+
+  function openModal() {
+    document.getElementById('modal').classList.add('open');
+    document.getElementById('modal-error').style.display = 'none';
+    ['m-first','m-last','m-email','m-phone','m-password'].forEach(id => {
+      document.getElementById(id).value = '';
+    });
+    document.getElementById('m-role').value = '';
+  }
+
+  function closeModal() {
+    document.getElementById('modal').classList.remove('open');
+  }
+
+  async function createUser() {
+    const btn = document.getElementById('modal-submit-btn');
+    const errEl = document.getElementById('modal-error');
+    errEl.style.display = 'none';
+
+    const first    = document.getElementById('m-first').value.trim();
+    const last     = document.getElementById('m-last').value.trim();
+    const email    = document.getElementById('m-email').value.trim();
+    const phone    = document.getElementById('m-phone').value.trim();
+    const role     = document.getElementById('m-role').value;
+    const password = document.getElementById('m-password').value;
+
+    if (!first || !last || !email || !role || !password) {
+      errEl.textContent = 'Please fill in all required fields.';
+      errEl.style.display = 'block';
+      return;
+    }
+    if (password.length < 8) {
+      errEl.textContent = 'Password must be at least 8 characters.';
+      errEl.style.display = 'block';
+      return;
+    }
+
+    btn.textContent = '⏳ Creating…'; btn.disabled = true;
+
+    try {
+      const res = await apiFetch('/admin/users/', {
+        method: 'POST',
+        body: JSON.stringify({
+          first_name:   first,
+          last_name:    last,
+          email:        email,
+          phone_number: phone,
+          role:         role,
+          password:     password,
+          password2:    password,
+        })
+      });
+
+      const data = await res.json();
+      if (res.ok) {
+        allUsers.unshift(data);
+        updateStats();
+        renderTable(getFiltered());
+        closeModal();
+        showToast(`${data.full_name} created successfully as ${role}!`);
+      } else {
+        const msg = Object.entries(data).map(([k,v]) => `${k}: ${Array.isArray(v) ? v.join(', ') : v}`).join(' | ');
+        errEl.textContent = msg || 'Failed to create user.';
+        errEl.style.display = 'block';
+      }
+    } catch(e) {
+      errEl.textContent = 'Connection error. Please try again.';
+      errEl.style.display = 'block';
+    } finally {
+      btn.textContent = 'Create Account'; btn.disabled = false;
+    }
+  }
+
+  // Close modal on overlay click
+  document.getElementById('modal').addEventListener('click', function(e) {
+    if (e.target === this) closeModal();
+  });
+
+  loadUsers();
+</script>
+{% endverbatim %}
+</body>
+</html>

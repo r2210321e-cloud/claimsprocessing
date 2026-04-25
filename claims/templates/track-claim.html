@@ -1,0 +1,441 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Zimnat Insurance — Track Claims</title>
+{% load static %}
+<link rel="stylesheet" href="{% static 'shared.css' %}"/>
+<style>
+  .filters-bar {
+    display: flex; gap: 10px; margin-bottom: 22px;
+    flex-wrap: wrap; align-items: center;
+  }
+  .filter-btn {
+    padding: 7px 16px;
+    border-radius: 20px;
+    border: 1.5px solid var(--green-border);
+    background: white;
+    font-size: 12px; font-weight: 600;
+    cursor: pointer; transition: all 0.2s;
+    font-family: 'DM Sans', sans-serif;
+    color: var(--gray-600);
+  }
+  .filter-btn:hover { border-color: var(--green-main); color: var(--green-main); }
+  .filter-btn.active { background: var(--green-main); border-color: var(--green-main); color: white; }
+
+  .search-filter {
+    margin-left: auto;
+    display: flex; align-items: center; gap: 8px;
+    background: white;
+    border: 1.5px solid var(--green-border);
+    border-radius: 20px;
+    padding: 7px 16px;
+  }
+  .search-filter input { border: none; outline: none; font-size: 13px; font-family: 'DM Sans', sans-serif; width: 160px; }
+
+  .claim-card {
+    background: white;
+    border-radius: var(--radius);
+    border: 1px solid var(--gray-200);
+    margin-bottom: 14px;
+    overflow: hidden;
+    transition: all 0.2s;
+    box-shadow: var(--shadow-sm);
+  }
+  .claim-card:hover { box-shadow: var(--shadow-md); border-color: var(--green-border); }
+
+  .claim-card-header {
+    padding: 16px 20px;
+    display: flex; align-items: center; gap: 14px;
+    cursor: pointer;
+    border-bottom: 1px solid transparent;
+    transition: all 0.2s;
+  }
+  .claim-card.expanded .claim-card-header { border-bottom-color: var(--gray-200); background: var(--green-pale); }
+
+  .claim-icon {
+    width: 44px; height: 44px;
+    border-radius: 10px;
+    background: var(--green-pale);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 20px; flex-shrink: 0;
+  }
+  .claim-info { flex: 1; }
+  .claim-number { font-size: 15px; font-weight: 700; color: var(--green-dark); }
+  .claim-meta { font-size: 12px; color: var(--gray-400); margin-top: 2px; }
+
+  .claim-card-detail {
+    padding: 20px;
+    display: none;
+    animation: fadeIn 0.3s ease;
+  }
+  .claim-card.expanded .claim-card-detail { display: block; }
+  @keyframes fadeIn { from{opacity:0;transform:translateY(-4px)} to{opacity:1;transform:translateY(0)} }
+
+  .detail-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-bottom: 20px; }
+  .detail-item { }
+  .detail-item .di-label { font-size: 11px; color: var(--gray-400); text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600; }
+  .detail-item .di-val { font-size: 14px; color: var(--gray-800); font-weight: 500; margin-top: 3px; }
+
+  .progress-track {
+    display: flex; gap: 0;
+    margin: 20px 0;
+    background: var(--gray-100);
+    border-radius: 30px;
+    padding: 4px;
+    overflow: hidden;
+  }
+  .progress-step {
+    flex: 1;
+    text-align: center;
+    padding: 8px 4px;
+    border-radius: 26px;
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--gray-400);
+    transition: all 0.3s;
+  }
+  .progress-step.done { background: var(--green-main); color: white; }
+  .progress-step.current { background: var(--yellow); color: var(--gray-800); }
+  .progress-step.declined-step { background: #ef4444; color: white; }
+
+  .docs-grid { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 10px; }
+  .doc-chip {
+    display: flex; align-items: center; gap: 8px;
+    background: var(--green-pale);
+    border: 1px solid var(--green-border);
+    border-radius: 8px;
+    padding: 7px 12px;
+    font-size: 12px; font-weight: 500;
+    color: var(--green-dark);
+    cursor: pointer; text-decoration: none;
+  }
+  .doc-chip:hover { background: var(--green-border); }
+
+  .empty-state {
+    text-align: center; padding: 60px 20px;
+    color: var(--gray-400);
+  }
+  .empty-state .es-icon { font-size: 52px; margin-bottom: 12px; }
+  .empty-state h3 { font-size: 18px; color: var(--gray-600); margin-bottom: 6px; }
+  .empty-state p { font-size: 14px; margin-bottom: 20px; }
+
+  .pagination { display: flex; justify-content: center; gap: 8px; margin-top: 24px; }
+  .page-btn {
+    width: 36px; height: 36px; border-radius: 8px;
+    border: 1.5px solid var(--green-border);
+    background: white; cursor: pointer;
+    font-size: 13px; font-weight: 600;
+    display: flex; align-items: center; justify-content: center;
+    transition: all 0.2s; font-family: 'DM Sans', sans-serif;
+    color: var(--gray-600);
+  }
+  .page-btn:hover, .page-btn.active { background: var(--green-main); border-color: var(--green-main); color: white; }
+</style>
+</head>
+<body>
+<div class="main-content">
+  <div class="page-content">
+
+    <!-- FILTERS -->
+    <div class="filters-bar">
+      <button class="filter-btn active" onclick="filterClaims('ALL', this)">All</button>
+      <button class="filter-btn" onclick="filterClaims('SUBMITTED', this)">Submitted</button>
+      <button class="filter-btn" onclick="filterClaims('UNDER_REVIEW', this)">Under Review</button>
+      <button class="filter-btn" onclick="filterClaims('APPROVED', this)">Approved</button>
+      <button class="filter-btn" onclick="filterClaims('DECLINED', this)">Declined</button>
+      <button class="filter-btn" onclick="filterClaims('SETTLED', this)">Settled</button>
+
+      <div class="search-filter">
+        <span>🔍</span>
+        <input type="text" id="claim-search" placeholder="Search claim number…" oninput="searchClaims(this.value)"/>
+      </div>
+
+      <a href="submit-claim.html" class="btn btn-green btn-sm">➕ New Claim</a>
+    </div>
+
+    <!-- CLAIMS LIST -->
+    <div id="claims-container">
+      <div class="empty-state"><div class="es-icon">⏳</div><p>Loading claims…</p></div>
+    </div>
+
+  </div>
+</div>
+
+<script src="{% static 'shared.js' %}"></script>
+<script>
+  renderLayout('track');
+  renderTopbar('Track Claims', 'Monitor your claim statuses');
+
+  let allClaims = [];
+  let currentFilter = 'ALL';
+
+  const statusIcons = { DRAFT:'📝', SUBMITTED:'📤', UNDER_REVIEW:'🔍', APPROVED:'✅', DECLINED:'❌', SETTLED:'💰' };
+  const statusSteps = ['SUBMITTED','UNDER_REVIEW','APPROVED','SETTLED'];
+
+  async function loadClaims() {
+    try {
+      const res = await apiFetch('/claims/?ordering=-created_at');
+      if (!res) return;
+      const data = await res.json();
+      allClaims = data.results || data;
+      renderClaims(allClaims);
+    } catch(e) {
+      document.getElementById('claims-container').innerHTML = `<div class="empty-state"><div class="es-icon">⚠️</div><p>Failed to load claims</p></div>`;
+    }
+  }
+
+  function filterClaims(status, btn) {
+    currentFilter = status;
+    document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    const filtered = status === 'ALL' ? allClaims : allClaims.filter(c => c.status === status);
+    renderClaims(filtered);
+  }
+
+  function searchClaims(val) {
+    const filtered = allClaims.filter(c =>
+      c.claim_number?.toLowerCase().includes(val.toLowerCase()) ||
+      c.incident_location?.toLowerCase().includes(val.toLowerCase())
+    );
+    renderClaims(filtered);
+  }
+
+  function getProgressSteps(status) {
+    if (status === 'DECLINED') {
+      return `
+        <div class="progress-step done">Submitted</div>
+        <div class="progress-step done">In Review</div>
+        <div class="progress-step declined-step">Declined ✗</div>
+        <div class="progress-step">Settled</div>
+      `;
+    }
+    const order = ['SUBMITTED','UNDER_REVIEW','APPROVED','SETTLED'];
+    const currentIdx = order.indexOf(status);
+    return order.map((s, i) => {
+      const labels = { SUBMITTED:'Submitted', UNDER_REVIEW:'In Review', APPROVED:'Approved', SETTLED:'Settled' };
+      if (i < currentIdx) return `<div class="progress-step done">${labels[s]} ✓</div>`;
+      if (i === currentIdx) return `<div class="progress-step current">${labels[s]}</div>`;
+      return `<div class="progress-step">${labels[s]}</div>`;
+    }).join('');
+  }
+
+  function renderClaims(claims) {
+    const container = document.getElementById('claims-container');
+    if (claims.length === 0) {
+      container.innerHTML = `
+        <div class="empty-state">
+          <div class="es-icon">📋</div>
+          <h3>No claims found</h3>
+          <p>You haven't submitted any claims yet or no claims match your filter.</p>
+          <a href="submit-claim.html" class="btn btn-green">➕ Submit Your First Claim</a>
+        </div>`;
+      return;
+    }
+
+    container.innerHTML = claims.map(c => `
+      <div class="claim-card" id="card-${c.id}">
+        <div class="claim-card-header" onclick="toggleCard('${c.id}')">
+          <div class="claim-icon">${statusIcons[c.status]||'📋'}</div>
+          <div class="claim-info">
+            <div class="claim-number">${c.claim_number}</div>
+            <div class="claim-meta">
+              ${c.incident_type?.replace(/_/g,' ')} &nbsp;·&nbsp;
+              ${formatDate(c.incident_date)} &nbsp;·&nbsp;
+              ${c.incident_location || '—'}
+            </div>
+          </div>
+          <div style="display:flex;align-items:center;gap:12px;flex-shrink:0">
+            ${statusBadge(c.status)}
+            <span style="color:var(--gray-400);font-size:12px">${formatCurrency(c.claimed_amount)}</span>
+            <span style="color:var(--gray-400);font-size:18px;transition:transform 0.2s" id="arrow-${c.id}">›</span>
+          </div>
+        </div>
+
+        <div class="claim-card-detail">
+          <!-- Progress Track -->
+          <div style="margin-bottom:16px">
+            <div style="font-size:12px;font-weight:700;color:var(--gray-400);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px">Claim Progress</div>
+            <div class="progress-track">${getProgressSteps(c.status)}</div>
+          </div>
+
+          <!-- Details Grid -->
+          <div class="detail-grid">
+            <div class="detail-item"><div class="di-label">Claim Number</div><div class="di-val">${c.claim_number}</div></div>
+            <div class="detail-item"><div class="di-label">Incident Date</div><div class="di-val">${formatDate(c.incident_date)}</div></div>
+            <div class="detail-item"><div class="di-label">Location</div><div class="di-val">${c.incident_location||'—'}</div></div>
+            <div class="detail-item"><div class="di-label">Claimed Amount</div><div class="di-val">${formatCurrency(c.claimed_amount)}</div></div>
+            <div class="detail-item"><div class="di-label">Approved Amount</div><div class="di-val" style="color:var(--green-main);font-weight:700">${formatCurrency(c.approved_amount)}</div></div>
+            <div class="detail-item"><div class="di-label">Settlement</div><div class="di-val">${formatCurrency(c.settlement_amount)}</div></div>
+            <div class="detail-item"><div class="di-label">Submitted</div><div class="di-val">${formatDate(c.submitted_at)}</div></div>
+            <div class="detail-item"><div class="di-label">Decision Date</div><div class="di-val">${formatDate(c.decided_at)}</div></div>
+            <div class="detail-item"><div class="di-label">Assigned Adjuster</div><div class="di-val">${c.adjuster_info?.full_name||'Pending assignment'}</div></div>
+          </div>
+
+          ${c.status === 'DECLINED' && c.decline_reason ? `
+            <div style="background:#fef2f2;border:1px solid #fecaca;border-radius:10px;padding:14px;margin-bottom:16px">
+              <div style="font-size:12px;font-weight:700;color:#dc2626;margin-bottom:4px">DECLINE REASON</div>
+              <div style="font-size:13px;color:#7f1d1d">${c.decline_reason}</div>
+            </div>
+          ` : ''}
+
+          ${c.adjuster_notes ? `
+            <div style="background:var(--green-pale);border:1px solid var(--green-border);border-radius:10px;padding:14px;margin-bottom:16px">
+              <div style="font-size:12px;font-weight:700;color:var(--green-dark);margin-bottom:4px">ADJUSTER NOTES</div>
+              <div style="font-size:13px;color:var(--green-dark)">${c.adjuster_notes}</div>
+            </div>
+          ` : ''}
+
+          <!-- Documents -->
+          <div style="margin-top:8px">
+            <div style="font-size:12px;font-weight:700;color:var(--gray-400);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px">Documents</div>
+            <div class="docs-grid" id="docs-${c.id}">
+              <span style="font-size:13px;color:var(--gray-400)">Loading documents…</span>
+            </div>
+          </div>
+
+          <!-- AI Assessment -->
+          <div style="margin-top:20px" id="assessment-wrap-${c.id}">
+            <div style="font-size:12px;font-weight:700;color:var(--gray-400);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px">🤖 AI Damage Assessment</div>
+            <div id="assessment-${c.id}">
+              <span style="font-size:13px;color:var(--gray-400)">Loading assessment…</span>
+            </div>
+          </div>
+
+          <!-- Actions -->
+          <div style="display:flex;gap:10px;margin-top:18px;padding-top:16px;border-top:1px solid var(--gray-200)">
+            ${['DRAFT','SUBMITTED'].includes(c.status) ? `<a href="submit-claim.html" class="btn btn-outline btn-sm">📎 Add Documents</a>` : ''}
+            <a href="#" class="btn btn-outline btn-sm" onclick="downloadReport('${c.id}')">📄 Download Report</a>
+          </div>
+        </div>
+      </div>
+    `).join('');
+  }
+
+  function toggleCard(id) {
+    const card  = document.getElementById(`card-${id}`);
+    const arrow = document.getElementById(`arrow-${id}`);
+    const isOpen = card.classList.contains('expanded');
+    card.classList.toggle('expanded');
+    arrow.style.transform = isOpen ? 'rotate(0deg)' : 'rotate(90deg)';
+    if (!isOpen) {
+      loadDocuments(id);
+      loadAssessments(id);
+    }
+  }
+
+  async function loadAssessments(claimId) {
+    const container = document.getElementById(`assessment-${claimId}`);
+    try {
+      const res = await apiFetch(`/claims/${claimId}/assessments/`);
+      if (!res) {
+        container.innerHTML = '<span style="font-size:13px;color:#ef4444;">⚠️ Auth error loading assessment.</span>';
+        return;
+      }
+      if (!res.ok) {
+        const errText = await res.text();
+        container.innerHTML = `<span style="font-size:13px;color:#ef4444;">⚠️ Server error ${res.status}: ${errText}</span>`;
+        return;
+      }
+      const data = await res.json();
+      const items = Array.isArray(data) ? data : (data.results || []);
+      const aiAssessment = items.find(a => a.assessment_type === 'AI_INITIAL');
+
+      if (!aiAssessment) {
+        container.innerHTML = '<span style="font-size:13px;color:var(--gray-400)">No AI assessment available yet — assessment runs automatically after claim submission.</span>';
+        return;
+      }
+
+      const sc = { 'MINOR':'#22c55e', 'MODERATE':'#f59e0b', 'SEVERE':'#ef4444', 'TOTAL_LOSS':'#7f1d1d' };
+      const severityLabel = { 'MINOR':'Minor', 'MODERATE':'Moderate', 'SEVERE':'Severe', 'TOTAL_LOSS':'Total Loss' };
+      const color = sc[aiAssessment.damage_severity] || '#aaa';
+
+      // damaged_parts can be: [{part, severity, description, cost_usd}] or ["string","string"]
+      const rawParts = aiAssessment.damaged_parts || [];
+      const damages = rawParts.map(d => typeof d === 'string' ? { part: d, severity: 'MINOR', description: '', cost_usd: 0 } : d);
+
+      const damagesHTML = damages.length ? `
+        <div style="margin-bottom:14px">
+          <div style="font-size:11px;font-weight:700;color:var(--green-dark);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px">Detected Damage</div>
+          ${damages.map(d => {
+            const sev = d.severity || '';
+            const dColor = {'Minor':'#22c55e','Moderate':'#f59e0b','Severe':'#ef4444','MINOR':'#22c55e','MODERATE':'#f59e0b','SEVERE':'#ef4444','TOTAL_LOSS':'#7f1d1d'}[sev] || '#aaa';
+            const sevLabel = {'MINOR':'Minor','MODERATE':'Moderate','SEVERE':'Severe','TOTAL_LOSS':'Total Loss','Minor':'Minor','Moderate':'Moderate','Severe':'Severe'}[sev] || sev;
+            const costStr = d.cost_usd ? 'USD ' + parseFloat(d.cost_usd).toLocaleString() : '';
+            return `<div style="display:flex;align-items:center;gap:10px;padding:7px 0;border-bottom:1px solid var(--green-border)">
+              <span style="width:7px;height:7px;border-radius:50%;background:${dColor};flex-shrink:0"></span>
+              <div style="flex:1">
+                <span style="font-size:13px;font-weight:600;color:var(--gray-800)">${d.part || d}</span>
+                ${sevLabel ? `<span style="font-size:11px;color:${dColor};font-weight:600;margin-left:8px;background:${dColor}22;padding:2px 8px;border-radius:10px">${sevLabel}</span>` : ''}
+                ${d.description ? `<div style="font-size:12px;color:var(--gray-400);margin-top:1px">${d.description}</div>` : ''}
+              </div>
+              ${costStr ? `<span style="font-size:13px;font-weight:600;color:var(--gray-800);white-space:nowrap">${costStr}</span>` : ''}
+            </div>`;
+          }).join('')}
+        </div>` : '';
+
+      container.innerHTML = `
+        <div style="background:var(--green-pale);border:1.5px solid var(--green-border);border-radius:12px;padding:18px">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;flex-wrap:wrap;gap:8px">
+            <div>
+              <div style="font-size:13px;font-weight:600;color:var(--green-dark)">AI Initial Assessment</div>
+              <div style="font-size:12px;color:var(--gray-400);margin-top:2px">${aiAssessment.damage_description || ''}</div>
+            </div>
+            <span style="font-size:11px;font-weight:700;padding:4px 12px;border-radius:20px;background:${color}22;color:${color};border:1px solid ${color}">
+              ${severityLabel[aiAssessment.damage_severity] || aiAssessment.damage_severity}
+            </span>
+          </div>
+          ${damagesHTML}
+          <div style="background:var(--green-dark);color:white;border-radius:10px;padding:12px 16px;display:flex;justify-content:space-between;align-items:center">
+            <span style="font-size:13px;font-weight:600">Total Estimated Repair Cost</span>
+            <span style="font-size:20px;font-weight:700">USD ${parseFloat(aiAssessment.total_estimate||0).toLocaleString()}</span>
+          </div>
+          <div style="font-size:11px;color:var(--gray-400);margin-top:10px;text-align:center">
+            ⚠️ AI estimate only — final cost determined by adjuster assessment
+          </div>
+        </div>`;
+    } catch(e) {
+      console.error('loadAssessments error:', e);
+      container.innerHTML = `<span style="font-size:13px;color:#ef4444;">⚠️ Error: ${e.message}</span>`;
+    }
+  }
+
+  async function loadDocuments(claimId) {
+    const container = document.getElementById(`docs-${claimId}`);
+    try {
+      const res = await apiFetch(`/claims/${claimId}/documents/`);
+      if (!res) return;
+      const docs = await res.json();
+      const items = docs.results || docs;
+      if (items.length === 0) {
+        container.innerHTML = '<span style="font-size:13px;color:var(--gray-400)">No documents uploaded yet</span>';
+        return;
+      }
+      container.innerHTML = items.map(d => `
+        <a href="${d.file_url||'#'}" target="_blank" class="doc-chip">
+          📎 ${d.document_type?.replace(/_/g,' ')}
+        </a>
+      `).join('');
+    } catch(e) {}
+  }
+
+  async function downloadReport(claimId) {
+    showToast('Generating report…');
+    try {
+      const res = await apiFetch(`/claims/${claimId}/report/`);
+      if (res && res.ok) {
+        const data = await res.json();
+        const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = `claim-${claimId}-report.json`;
+        a.click();
+      }
+    } catch(e) { showToast('Report download failed', 'error'); }
+  }
+
+  loadClaims();
+</script>
+</body>
+</html>

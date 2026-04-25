@@ -1,0 +1,1027 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Zimnat Insurance — Submit Claim</title>
+{% load static %}
+<link rel="stylesheet" href="{% static 'shared.css' %}"/>
+<style>
+  .submit-wrap { max-width: 780px; }
+
+  .step-content { display: none; animation: fadeIn 0.3s ease; }
+  .step-content.active { display: block; }
+  @keyframes fadeIn { from{opacity:0;transform:translateY(8px)} to{opacity:1;transform:translateY(0)} }
+
+  .section-heading {
+    font-family: 'Playfair Display', serif;
+    font-size: 18px; color: var(--green-dark);
+    margin-bottom: 20px;
+    padding-bottom: 12px;
+    border-bottom: 2px solid var(--green-pale);
+  }
+
+  .radio-group { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 8px; }
+  .radio-card {
+    border: 1.5px solid var(--green-border);
+    border-radius: 10px;
+    padding: 12px 18px;
+    cursor: pointer;
+    transition: all 0.2s;
+    display: flex; align-items: center; gap: 10px;
+    font-size: 13px; font-weight: 500;
+    color: var(--gray-600);
+  }
+  .radio-card:hover { border-color: var(--green-main); color: var(--green-dark); }
+  .radio-card.selected { border-color: var(--green-main); background: var(--green-pale); color: var(--green-dark); font-weight: 600; }
+  .radio-card input[type="radio"] { display: none; }
+
+  /* ── INLINE ERROR STYLES ── */
+  .form-control.is-invalid {
+    border-color: #ef4444 !important;
+    background-color: #fff5f5;
+  }
+  .form-control.is-valid {
+    border-color: #22c55e !important;
+    background-color: #f0fdf4;
+  }
+  .field-error {
+    display: none;
+    color: #ef4444;
+    font-size: 12px;
+    margin-top: 5px;
+    font-weight: 500;
+    animation: slideDown 0.2s ease;
+  }
+  .field-error.visible {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+  }
+  .field-error::before { content: '⚠ '; }
+  @keyframes slideDown {
+    from { opacity: 0; transform: translateY(-4px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+  .radio-group.is-invalid + .field-error,
+  .radio-group.is-invalid ~ .field-error {
+    display: flex;
+  }
+  .radio-group.is-invalid .radio-card {
+    border-color: #fca5a5;
+  }
+
+  /* char counter */
+  .char-counter {
+    font-size: 11px;
+    color: var(--gray-400);
+    text-align: right;
+    margin-top: 3px;
+    transition: color 0.2s;
+  }
+  .char-counter.warn  { color: #f59e0b; font-weight: 600; }
+  .char-counter.error { color: #ef4444; font-weight: 600; }
+
+  .uploaded-files { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 14px; }
+  .file-thumb {
+    width: 90px; height: 90px;
+    border-radius: 10px;
+    border: 1px solid var(--green-border);
+    overflow: hidden;
+    position: relative;
+    background: var(--green-pale);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 28px;
+  }
+  .file-thumb img { width: 100%; height: 100%; object-fit: cover; }
+  .file-thumb .remove-file {
+    position: absolute; top: 3px; right: 3px;
+    background: #ef4444; color: white;
+    border: none; border-radius: 50%;
+    width: 18px; height: 18px;
+    font-size: 10px; cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+  }
+
+  .review-table { width: 100%; }
+  .review-row { display: flex; padding: 10px 0; border-bottom: 1px solid var(--gray-100); }
+  .review-key { width: 180px; font-size: 13px; color: var(--gray-400); flex-shrink: 0; }
+  .review-val { font-size: 13px; font-weight: 500; color: var(--gray-800); }
+
+  .step-nav {
+    display: flex; justify-content: space-between; align-items: center;
+    margin-top: 32px; padding-top: 20px;
+    border-top: 1px solid var(--gray-200);
+  }
+
+  @keyframes spin { from{transform:rotate(0deg)} to{transform:rotate(360deg)} }
+  .toggle-section { display: none; }
+  .toggle-section.show { display: block; animation: fadeIn 0.3s ease; }
+  .pay-provider-active { border-color: var(--green-main) !important; background: var(--green-pale) !important; box-shadow: 0 0 0 3px rgba(26,122,74,0.15); }
+</style>
+</head>
+<body>
+<div class="main-content">
+  <div class="page-content">
+    <div class="submit-wrap">
+
+      <!-- STEPS INDICATOR -->
+      <div class="steps" id="steps-indicator">
+        <div class="step active" id="step-ind-1"><div class="step-circle">1</div><div class="step-label">Incident Details</div></div>
+        <div class="step" id="step-ind-2"><div class="step-circle">2</div><div class="step-label">Vehicle & Policy</div></div>
+        <div class="step" id="step-ind-3"><div class="step-circle">3</div><div class="step-label">Documents</div></div>
+        <div class="step" id="step-ind-4"><div class="step-circle">4</div><div class="step-label">Review & Submit</div></div>
+      </div>
+
+      <div class="card">
+        <div class="card-body">
+
+          <!-- ── STEP 1: INCIDENT DETAILS ── -->
+          <div class="step-content active" id="step-1">
+            <h3 class="section-heading">📍 Incident Information</h3>
+
+            <div class="form-grid-2">
+              <div class="form-group">
+                <label>Incident Date *</label>
+                <input type="date" class="form-control" id="incident_date" required/>
+                <div class="field-error" id="err-incident_date"></div>
+              </div>
+              <div class="form-group">
+                <label>Incident Time</label>
+                <input type="time" class="form-control" id="incident_time"/>
+              </div>
+            </div>
+
+            <div class="form-group">
+              <label>Location of Incident *</label>
+              <input type="text" class="form-control" id="incident_location" placeholder="e.g. Corner Samora Machel & Julius Nyerere, Harare" required/>
+              <div class="field-error" id="err-incident_location"></div>
+            </div>
+
+            <div class="form-group">
+              <label>Type of Incident *</label>
+              <div class="radio-group" id="incident_type_group">
+                <label class="radio-card" onclick="selectRadio('incident_type_group','COLLISION',this)">
+                  <input type="radio" name="incident_type" value="COLLISION"/> 💥 Collision
+                </label>
+                <label class="radio-card" onclick="selectRadio('incident_type_group','THEFT',this)">
+                  <input type="radio" name="incident_type" value="THEFT"/> 🔓 Theft
+                </label>
+                <label class="radio-card" onclick="selectRadio('incident_type_group','FIRE',this)">
+                  <input type="radio" name="incident_type" value="FIRE"/> 🔥 Fire
+                </label>
+                <label class="radio-card" onclick="selectRadio('incident_type_group','FLOOD',this)">
+                  <input type="radio" name="incident_type" value="FLOOD"/> 🌊 Flood
+                </label>
+                <label class="radio-card" onclick="selectRadio('incident_type_group','VANDALISM',this)">
+                  <input type="radio" name="incident_type" value="VANDALISM"/> 🪨 Vandalism
+                </label>
+                <label class="radio-card" onclick="selectRadio('incident_type_group','OTHER',this)">
+                  <input type="radio" name="incident_type" value="OTHER"/> 📋 Other
+                </label>
+              </div>
+              <div class="field-error" id="err-incident_type"></div>
+            </div>
+
+            <div class="form-group">
+              <label>Fault *</label>
+              <div class="radio-group" id="fault_group">
+                <label class="radio-card" onclick="selectRadio('fault_group','AT_FAULT',this)">
+                  <input type="radio" name="fault_type" value="AT_FAULT"/> At Fault
+                </label>
+                <label class="radio-card" onclick="selectRadio('fault_group','NOT_AT_FAULT',this)">
+                  <input type="radio" name="fault_type" value="NOT_AT_FAULT"/> Not At Fault
+                </label>
+                <label class="radio-card" onclick="selectRadio('fault_group','PARTIAL',this)">
+                  <input type="radio" name="fault_type" value="PARTIAL"/> Partial
+                </label>
+                <label class="radio-card" onclick="selectRadio('fault_group','UNKNOWN',this)">
+                  <input type="radio" name="fault_type" value="UNKNOWN"/> Unknown
+                </label>
+              </div>
+            </div>
+
+            <div class="form-group">
+              <label>Describe what happened * <span style="font-size:11px;color:var(--gray-400);font-weight:400">(max 2 sentences)</span></label>
+              <textarea class="form-control" id="incident_description" rows="4" placeholder="Provide a brief account of the incident…" required></textarea>
+              <div class="char-counter" id="counter-incident_description">0 sentences used of 2</div>
+              <div class="field-error" id="err-incident_description"></div>
+            </div>
+
+            <div class="form-grid-2">
+              <div class="form-group">
+                <label>Was a police report filed?</label>
+                <select class="form-control" id="police_filed" onchange="togglePoliceNum()">
+                  <option value="false">No</option>
+                  <option value="true">Yes</option>
+                </select>
+              </div>
+              <div class="form-group toggle-section" id="police-num-wrap">
+                <label>Police Report Number *</label>
+                <input type="text" class="form-control" id="police_report_number" placeholder="e.g. CID/HRE/2026/1234"/>
+                <div class="field-error" id="err-police_report_number"></div>
+              </div>
+            </div>
+
+            <div class="form-group">
+              <label>Were injuries reported?</label>
+              <select class="form-control" id="injuries_reported" onchange="toggleInjuries()">
+                <option value="false">No</option>
+                <option value="true">Yes</option>
+              </select>
+            </div>
+            <div class="form-group toggle-section" id="injuries-wrap">
+              <label>Describe Injuries * <span style="font-size:11px;color:var(--gray-400);font-weight:400">(max 2 sentences)</span></label>
+              <textarea class="form-control" id="injury_description" rows="2" placeholder="Describe injuries sustained…"></textarea>
+              <div class="char-counter" id="counter-injury_description">0 sentences used of 2</div>
+              <div class="field-error" id="err-injury_description"></div>
+            </div>
+
+            <div class="form-group">
+              <label>Was a third party involved?</label>
+              <select class="form-control" id="third_party_involved" onchange="toggleThirdParty()">
+                <option value="false">No</option>
+                <option value="true">Yes</option>
+              </select>
+            </div>
+            <div class="toggle-section" id="third-party-wrap">
+              <div class="form-grid-2">
+                <div class="form-group">
+                  <label>Third Party Name</label>
+                  <input type="text" class="form-control" id="tp_name" placeholder="Full name"/>
+                  <div class="field-error" id="err-tp_name"></div>
+                </div>
+                <div class="form-group">
+                  <label>Third Party Phone</label>
+                  <input type="tel" class="form-control" id="tp_phone" placeholder="+263 77 000 0000"/>
+                  <div class="field-error" id="err-tp_phone"></div>
+                </div>
+                <div class="form-group">
+                  <label>Third Party License Plate</label>
+                  <input type="text" class="form-control" id="tp_plate" placeholder="e.g. AEF 1234"/>
+                  <div class="field-error" id="err-tp_plate"></div>
+                </div>
+                <div class="form-group">
+                  <label>Third Party Insurer</label>
+                  <input type="text" class="form-control" id="tp_insurer" placeholder="Insurer name"/>
+                </div>
+              </div>
+            </div>
+
+            <div class="step-nav">
+              <div></div>
+              <button class="btn btn-green" onclick="goStep(2)">Next: Vehicle & Policy →</button>
+            </div>
+          </div>
+          <!-- END STEP 1 -->
+
+          <!-- ── STEP 2: VEHICLE & POLICY ── -->
+          <div class="step-content" id="step-2">
+            <h3 class="section-heading">🚗 Vehicle & Policy Details</h3>
+
+            <div class="form-group">
+              <label>Select Your Policy *</label>
+              <select class="form-control" id="policy_id" required onchange="onPolicyChange()">
+                <option value="">— Select a policy —</option>
+              </select>
+              <div class="field-error" id="err-policy_id"></div>
+            </div>
+
+            <div class="form-group">
+              <label>Select Vehicle *</label>
+              <select class="form-control" id="vehicle_id" required>
+                <option value="">— Select a vehicle —</option>
+              </select>
+              <div class="field-error" id="err-vehicle_id"></div>
+            </div>
+
+            <div class="form-group" style="margin-top:20px">
+              <label>Claimed Amount (USD)</label>
+              <input type="number" class="form-control" id="claimed_amount" placeholder="0.00" min="0" step="0.01"/>
+              <div class="field-error" id="err-claimed_amount"></div>
+            </div>
+
+            <div class="step-nav">
+              <button class="btn btn-outline" onclick="goStep(1)">← Back</button>
+              <button class="btn btn-green" onclick="goStep(3)">Next: Upload Documents →</button>
+            </div>
+          </div>
+          <!-- END STEP 2 -->
+
+          <!-- ── STEP 3: DOCUMENTS ── -->
+          <div class="step-content" id="step-3">
+            <h3 class="section-heading">📎 Upload Supporting Documents</h3>
+            <p style="font-size:13px;color:var(--gray-400);margin-bottom:24px">Upload clear photos of the damaged vehicle and your police report. Our AI will analyse the damage photos to estimate repair costs. Max 10MB per file.</p>
+
+            <!-- Vehicle Damage Photos -->
+            <div style="margin-bottom:20px">
+              <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">
+                <span style="font-size:20px">🚗</span>
+                <div>
+                  <div style="font-size:14px;font-weight:600;color:var(--green-dark)">Vehicle Damage Photos <span style="color:#ef4444">*</span></div>
+                  <div style="font-size:12px;color:var(--gray-400)">Upload clear photos of ALL damaged areas — front, rear, sides. The AI will analyse these to estimate repair costs.</div>
+                </div>
+              </div>
+              <div class="upload-zone" onclick="document.getElementById('file-VEHICLE_PHOTO').click()">
+                <div class="upload-icon">📤</div>
+                <p>Click to upload or drag & drop</p>
+                <span>JPG, PNG up to 10MB — upload multiple angles</span>
+              </div>
+              <input type="file" id="file-VEHICLE_PHOTO" style="display:none" multiple accept=".jpg,.jpeg,.png" onchange="handleFileSelect(event,'VEHICLE_PHOTO')"/>
+              <div class="uploaded-files" id="files-VEHICLE_PHOTO"></div>
+              <div class="field-error" id="err-vehicle_photos"></div>
+            </div>
+
+            <!-- Police Report -->
+            <div style="margin-bottom:20px">
+              <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">
+                <span style="font-size:20px">👮</span>
+                <div>
+                  <div style="font-size:14px;font-weight:600;color:var(--green-dark)">Police Report</div>
+                  <div style="font-size:12px;color:var(--gray-400)">Scanned copy or photo of the police report (if filed)</div>
+                </div>
+              </div>
+              <div class="upload-zone" onclick="document.getElementById('file-POLICE_REPORT').click()">
+                <div class="upload-icon">📤</div>
+                <p>Click to upload or drag & drop</p>
+                <span>JPG, PNG, PDF up to 10MB</span>
+              </div>
+              <input type="file" id="file-POLICE_REPORT" style="display:none" multiple accept=".jpg,.jpeg,.png,.pdf" onchange="handleFileSelect(event,'POLICE_REPORT')"/>
+              <div class="uploaded-files" id="files-POLICE_REPORT"></div>
+            </div>
+
+            <div style="background:var(--green-pale);border:1.5px solid var(--green-border);border-radius:10px;padding:14px;font-size:13px;color:var(--green-dark);margin-bottom:20px">
+              🤖 <strong>AI Damage Assessment:</strong> After uploading your photos, our AI will automatically analyse the damage and provide a detailed repair cost estimate on the next step.
+            </div>
+
+            <div class="step-nav">
+              <button class="btn btn-outline" onclick="goStep(2)">← Back</button>
+              <button class="btn btn-green" onclick="goStepAndReview()">Next: Review & Submit →</button>
+            </div>
+          </div>
+          <!-- END STEP 3 -->
+
+          <!-- ── STEP 4: REVIEW & SUBMIT ── -->
+          <div class="step-content" id="step-4">
+            <h3 class="section-heading">✅ Review & Submit</h3>
+            <p style="font-size:13px;color:var(--gray-400);margin-bottom:20px">Please review your claim details carefully before submitting.</p>
+
+            <!-- Claim Summary -->
+            <div id="review-content"></div>
+
+            <!-- AI Damage Assessment (auto-runs, shown inline) -->
+            <div style="margin-top:24px">
+              <div style="font-family:'Playfair Display',serif;font-size:18px;color:var(--green-dark);margin-bottom:20px;padding-bottom:12px;border-bottom:2px solid var(--green-pale)">
+                🤖 AI Damage Assessment
+              </div>
+
+              <!-- Loading -->
+              <div id="ai-loading" style="text-align:center;padding:32px 20px;display:none">
+                <div style="font-size:40px;margin-bottom:12px;animation:spin 1.5s linear infinite;display:inline-block">⚙️</div>
+                <div style="font-size:15px;font-weight:600;color:var(--green-dark);margin-bottom:6px">Analysing damage photos…</div>
+                <div style="font-size:13px;color:var(--gray-400)">Gemini AI is inspecting each photo — this may take up to 30 seconds…</div>
+              </div>
+
+              <!-- No Photos -->
+              <div id="ai-no-photos" style="display:none;background:#fff5f5;border:1.5px solid #fca5a5;border-radius:10px;padding:16px;text-align:center;margin-bottom:20px">
+                <div style="font-size:28px;margin-bottom:8px">📷</div>
+                <div style="font-size:13px;font-weight:600;color:#ef4444">No damage photos uploaded — manual assessment will be carried out by our team.</div>
+              </div>
+
+              <!-- Result -->
+              <div id="ai-result" style="display:none">
+                <div style="background:var(--green-pale);border:1.5px solid var(--green-border);border-radius:12px;padding:20px;margin-bottom:16px">
+                  <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px">
+                    <span style="font-size:22px">🤖</span>
+                    <div>
+                      <div style="font-size:14px;font-weight:700;color:var(--green-dark)">AI Damage Assessment Report</div>
+                      <div style="font-size:12px;color:var(--gray-400)" id="ai-timestamp"></div>
+                    </div>
+                  </div>
+                  <div style="margin-bottom:14px">
+                    <div style="font-size:12px;font-weight:700;color:var(--green-dark);margin-bottom:8px;text-transform:uppercase;letter-spacing:0.5px">Detected Damage</div>
+                    <div id="ai-damage-list"></div>
+                  </div>
+                  <div style="border-top:1px solid var(--green-border);padding-top:14px;margin-bottom:14px">
+                    <div style="font-size:12px;font-weight:700;color:var(--green-dark);margin-bottom:8px;text-transform:uppercase;letter-spacing:0.5px">Estimated Repair Costs</div>
+                    <div id="ai-cost-breakdown"></div>
+                  </div>
+                  <div style="background:var(--green-dark);color:white;border-radius:10px;padding:12px 16px;display:flex;justify-content:space-between;align-items:center">
+                    <div style="font-size:13px;font-weight:600">Total Estimated Repair Cost</div>
+                    <div style="font-size:20px;font-weight:700" id="ai-total-cost">USD 0.00</div>
+                  </div>
+                </div>
+                <div style="background:#fffbeb;border:1.5px solid #f59e0b;border-radius:10px;padding:12px;font-size:12px;color:#92400e;margin-bottom:20px">
+                  ⚠️ <strong>Disclaimer:</strong> This is an AI-generated estimate based on visible damage. Final costs may vary. A qualified assessor will review your claim before approval.
+                </div>
+              </div>
+            </div>
+
+            <div style="background:var(--yellow-light);border:1.5px solid var(--yellow);border-radius:10px;padding:16px;margin-top:8px;font-size:13px;color:var(--gray-600)">
+              ⚠️ By submitting this claim, you confirm that all information provided is accurate and complete. False or misleading information may result in your claim being declined.
+            </div>
+
+            <div class="step-nav">
+              <button class="btn btn-outline" onclick="goStep(3)">← Back</button>
+              <button class="btn btn-green" onclick="submitClaim()" id="submit-btn" style="padding:12px 32px;font-size:15px">
+                🚀 Submit Claim
+              </button>
+            </div>
+          </div>
+          <!-- END STEP 4 -->
+
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="{% static 'shared.js' %}"></script>
+{% verbatim %}
+<script>
+  renderLayout('submit');
+  renderTopbar('Submit a Claim', 'Report a new incident');
+
+  let currentStep = 1;
+  let selectedValues = {};
+  let uploadedFiles = {};
+  let aiAssessmentResult = null;
+
+
+
+  async function goStepAndReview() {
+    if (!(uploadedFiles['VEHICLE_PHOTO'] && uploadedFiles['VEHICLE_PHOTO'].length > 0)) {
+      const err = document.getElementById('err-vehicle_photos');
+      if (err) { err.textContent = 'Please upload at least one vehicle damage photo.'; err.classList.add('visible'); }
+      showToast('Please upload at least one vehicle damage photo.', 'error');
+      return;
+    }
+    goStep(4);
+  }
+
+  async function runAIAssessment() {
+    document.getElementById('ai-loading').style.display = 'block';
+    document.getElementById('ai-result').style.display = 'none';
+    document.getElementById('ai-no-photos').style.display = 'none';
+
+    const photos = uploadedFiles['VEHICLE_PHOTO'] || [];
+    if (!photos.length) {
+      document.getElementById('ai-loading').style.display = 'none';
+      document.getElementById('ai-no-photos').style.display = 'block';
+      return;
+    }
+
+    async function toBase64(file) {
+      return new Promise((res, rej) => {
+        const r = new FileReader();
+        r.onload = e => res(e.target.result.split(',')[1]);
+        r.onerror = rej;
+        r.readAsDataURL(file);
+      });
+    }
+
+    try {
+      const imageContents = [];
+      for (const photo of photos.slice(0, 3)) {
+        const b64 = await toBase64(photo);
+        imageContents.push({ type: 'image', source: { type: 'base64', media_type: photo.type || 'image/jpeg', data: b64 } });
+      }
+      const response = await fetch(API + '/claims/ai-assess/', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer ' + getToken()
+        },
+        body: JSON.stringify({ images: imageContents })
+      });
+
+      if (response.status === 429) throw new Error('AI is busy — please wait 30 seconds and try again by going Back then Next again.');
+      if (!response.ok) {
+        const errData = await response.json().catch(() => ({}));
+        throw new Error(errData.detail || 'API error ' + response.status);
+      }
+      const data = await response.json();
+      const parsed = data;
+      aiAssessmentResult = parsed;
+      renderAIResult(parsed);
+    } catch(e) {
+      console.error('AI Assessment error:', e);
+      document.getElementById('ai-loading').style.display = 'none';
+      document.getElementById('ai-result').style.display = 'block';
+      document.getElementById('ai-damage-list').innerHTML = '<p style="color:#ef4444;font-size:13px">⚠️ Assessment failed: ' + e.message + ' — photos will be manually reviewed by our team.</p>';
+      document.getElementById('ai-cost-breakdown').innerHTML = '';
+      document.getElementById('ai-total-cost').textContent = 'USD TBD';
+      document.getElementById('ai-timestamp').textContent = 'Manual assessment required';
+    }
+  }
+
+  function renderAIResult(result) {
+    document.getElementById('ai-loading').style.display = 'none';
+    document.getElementById('ai-result').style.display = 'block';
+    document.getElementById('ai-timestamp').textContent = 'Assessed on ' + new Date().toLocaleString();
+    const sc = { 'Minor': '#22c55e', 'Moderate': '#f59e0b', 'Severe': '#ef4444' };
+    document.getElementById('ai-damage-list').innerHTML = (result.damages || []).map(d =>
+      '<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--green-border)">' +
+      '<span style="width:8px;height:8px;border-radius:50%;background:' + (sc[d.severity]||'#aaa') + ';flex-shrink:0"></span>' +
+      '<div style="flex:1"><span style="font-size:13px;font-weight:600;color:var(--gray-800)">' + d.part + '</span>' +
+      '<span style="font-size:11px;color:' + (sc[d.severity]||'#aaa') + ';font-weight:600;margin-left:8px;background:' + (sc[d.severity]||'#aaa') + '22;padding:2px 8px;border-radius:10px">' + d.severity + '</span>' +
+      '<div style="font-size:12px;color:var(--gray-400);margin-top:2px">' + d.description + '</div></div></div>'
+    ).join('');
+    document.getElementById('ai-cost-breakdown').innerHTML = (result.damages || []).map(d =>
+      '<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--green-border);font-size:13px">' +
+      '<span style="color:var(--gray-600)">' + d.part + '</span>' +
+      '<span style="font-weight:600;color:var(--gray-800)">USD ' + (d.cost_usd||0).toLocaleString() + '</span></div>'
+    ).join('');
+    document.getElementById('ai-total-cost').textContent = 'USD ' + (result.total_cost_usd||0).toLocaleString();
+  }
+
+  // ─────────────────────────────────────────────────────────────────
+  // INLINE VALIDATION HELPERS
+  // ─────────────────────────────────────────────────────────────────
+
+  function showError(fieldId, message) {
+    const el = document.getElementById(fieldId);
+    const err = document.getElementById('err-' + fieldId);
+    if (el) el.classList.add('is-invalid');
+    if (el) el.classList.remove('is-valid');
+    if (err) { err.textContent = message; err.classList.add('visible'); }
+  }
+
+  function clearError(fieldId) {
+    const el = document.getElementById(fieldId);
+    const err = document.getElementById('err-' + fieldId);
+    if (el) { el.classList.remove('is-invalid'); el.classList.add('is-valid'); }
+    if (err) { err.textContent = ''; err.classList.remove('visible'); }
+  }
+
+  function resetField(fieldId) {
+    const el = document.getElementById(fieldId);
+    const err = document.getElementById('err-' + fieldId);
+    if (el) { el.classList.remove('is-invalid', 'is-valid'); }
+    if (err) { err.textContent = ''; err.classList.remove('visible'); }
+  }
+
+  function countSentences(text) {
+    if (!text || !text.trim()) return 0;
+    return text.trim().split(/[.!?]+/).filter(s => s.trim().length > 0).length;
+  }
+
+  function isMeaningful(text) {
+    if (!text || !text.trim()) return false;
+    const words = text.trim().split(/\s+/).filter(w => /^[a-zA-Z]{2,}/.test(w));
+    return words.length >= 3;
+  }
+
+  function validatePhone(value) {
+    if (!value || !value.trim()) return null; // optional
+    const digits = value.replace(/^\+/, '').replace(/[\s\-]/g, '');
+    if (!/^\d+$/.test(digits)) return 'Phone number must contain digits only (optionally starting with +).';
+    if (digits.length < 7)     return 'Phone number is too short. Please enter at least 7 digits.';
+    if (digits.length > 10)    return `Phone number must not exceed 10 digits. You entered ${digits.length}.`;
+    if (new Set(digits).size === 1) return 'Phone number does not look valid.';
+    return null; // valid
+  }
+
+  // ─────────────────────────────────────────────────────────────────
+  // REAL-TIME EVENT LISTENERS — wired up after DOM is ready
+  // ─────────────────────────────────────────────────────────────────
+
+  function attachLiveValidation() {
+
+    // ── Incident Date ──────────────────────────────────────────────
+    document.getElementById('incident_date').addEventListener('change', function() {
+      const val = this.value;
+      if (!val) { showError('incident_date', 'Incident date is required.'); return; }
+      const today = new Date(); today.setHours(0,0,0,0);
+      const chosen = new Date(val);
+      if (chosen > today) {
+        showError('incident_date', 'Incident date cannot be in the future. Please enter the actual date of the incident.');
+        return;
+      }
+      const tenYearsAgo = new Date();
+      tenYearsAgo.setFullYear(tenYearsAgo.getFullYear() - 10);
+      if (chosen < tenYearsAgo) {
+        showError('incident_date', 'Incident date seems too far in the past. Please check the date you entered.');
+        return;
+      }
+      clearError('incident_date');
+    });
+
+    // ── Incident Location ──────────────────────────────────────────
+    document.getElementById('incident_location').addEventListener('input', function() {
+      const val = this.value.trim();
+      if (!val) { showError('incident_location', 'Incident location is required.'); return; }
+      if (val.length < 5) { showError('incident_location', 'Location is too short. Please enter a recognisable address.'); return; }
+      const words = val.split(/\s+/).filter(w => /^[a-zA-Z]{2,}/.test(w));
+      if (words.length < 1) { showError('incident_location', 'Location must contain at least one recognisable place name.'); return; }
+      clearError('incident_location');
+    });
+
+    // ── Incident Description — live sentence counter ───────────────
+    document.getElementById('incident_description').addEventListener('input', function() {
+      const val = this.value;
+      const sentences = countSentences(val);
+      const counter = document.getElementById('counter-incident_description');
+
+      // Update counter colour
+      counter.textContent = sentences + ' sentence' + (sentences !== 1 ? 's' : '') + ' used of 2';
+      counter.className = 'char-counter' + (sentences > 2 ? ' error' : sentences === 2 ? ' warn' : '');
+
+      if (!val.trim()) { showError('incident_description', 'Please describe what happened.'); return; }
+      if (!isMeaningful(val)) { showError('incident_description', 'Description must be meaningful — use at least 3 proper words.'); return; }
+      if (sentences > 2) { showError('incident_description', `Description must not exceed 2 sentences. You have ${sentences}. Please shorten it.`); return; }
+      clearError('incident_description');
+    });
+
+    // ── Injury Description — live sentence counter ─────────────────
+    document.getElementById('injury_description').addEventListener('input', function() {
+      const val = this.value;
+      if (!val.trim()) { resetField('injury_description'); document.getElementById('counter-injury_description').textContent = '0 sentences used of 2'; return; }
+      const sentences = countSentences(val);
+      const counter = document.getElementById('counter-injury_description');
+      counter.textContent = sentences + ' sentence' + (sentences !== 1 ? 's' : '') + ' used of 2';
+      counter.className = 'char-counter' + (sentences > 2 ? ' error' : sentences === 2 ? ' warn' : '');
+      if (!isMeaningful(val)) { showError('injury_description', 'Injury description must be meaningful — use at least 3 proper words.'); return; }
+      if (sentences > 2) { showError('injury_description', `Injury description must not exceed 2 sentences. You have ${sentences}.`); return; }
+      clearError('injury_description');
+    });
+
+    // ── Police Report Number ───────────────────────────────────────
+    document.getElementById('police_report_number').addEventListener('input', function() {
+      if (document.getElementById('police_filed').value !== 'true') return;
+      const val = this.value.trim();
+      if (!val) { showError('police_report_number', 'Police report number is required when a report was filed.'); return; }
+      if (val.length < 4) { showError('police_report_number', 'Police report number appears too short.'); return; }
+      clearError('police_report_number');
+    });
+
+    // ── Third Party Phone ──────────────────────────────────────────
+    document.getElementById('tp_phone').addEventListener('input', function() {
+      const err = validatePhone(this.value);
+      if (err) showError('tp_phone', err);
+      else if (this.value.trim()) clearError('tp_phone');
+      else resetField('tp_phone');
+    });
+
+    // ── Third Party Name ───────────────────────────────────────────
+    document.getElementById('tp_name').addEventListener('input', function() {
+      const val = this.value.trim();
+      if (!val) { resetField('tp_name'); return; }
+      if (!/^[a-zA-Z\s\-']+$/.test(val)) { showError('tp_name', 'Name must contain letters only.'); return; }
+      if (val.length < 2) { showError('tp_name', 'Name is too short.'); return; }
+      clearError('tp_name');
+    });
+
+    // ── Third Party License Plate ──────────────────────────────────
+    document.getElementById('tp_plate').addEventListener('input', function() {
+      const val = this.value.trim().toUpperCase().replace(/\s/g, '');
+      if (!val) { resetField('tp_plate'); return; }
+      if (!/^[A-Z]{2,3}\d{3,4}[A-Z]?$/.test(val)) {
+        showError('tp_plate', 'Plate format appears invalid. Expected: e.g. ABC1234.');
+      } else {
+        clearError('tp_plate');
+      }
+    });
+
+    // ── Claimed Amount ─────────────────────────────────────────────
+    document.getElementById('claimed_amount').addEventListener('input', function() {
+      const val = parseFloat(this.value);
+      if (this.value === '') { resetField('claimed_amount'); return; }
+      if (isNaN(val) || val <= 0) { showError('claimed_amount', 'Claimed amount must be greater than zero.'); return; }
+      if (val > 10000000) { showError('claimed_amount', 'Claimed amount exceeds the maximum allowed value. Please verify.'); return; }
+      clearError('claimed_amount');
+    });
+
+    // ── Policy select ──────────────────────────────────────────────
+    document.getElementById('policy_id').addEventListener('change', function() {
+      if (!this.value) showError('policy_id', 'Please select a policy.');
+      else clearError('policy_id');
+    });
+
+    // ── Vehicle select ─────────────────────────────────────────────
+    document.getElementById('vehicle_id').addEventListener('change', function() {
+      if (!this.value) showError('vehicle_id', 'Please select a vehicle.');
+      else clearError('vehicle_id');
+    });
+  }
+
+  // ─────────────────────────────────────────────────────────────────
+  // STEP NAVIGATION (still validates before moving forward)
+  // ─────────────────────────────────────────────────────────────────
+
+  function goStep(step) {
+    if (step > 1 && currentStep === 1) {
+      if (!validateStep1()) return;
+    }
+    if (step > 2 && currentStep === 2) {
+      if (!validateStep2()) return;
+    }
+    if (step === 4) { buildReview(); runAIAssessment(); }
+
+    document.getElementById('step-' + currentStep).classList.remove('active');
+    document.getElementById('step-ind-' + currentStep).classList.remove('active');
+    if (step > currentStep) {
+      document.getElementById('step-ind-' + currentStep).classList.add('completed');
+    }
+    currentStep = step;
+    document.getElementById('step-' + currentStep).classList.add('active');
+    document.getElementById('step-ind-' + currentStep).classList.add('active');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
+  function validateStep1() {
+    let ok = true;
+
+    // Date
+    const dateVal = document.getElementById('incident_date').value;
+    if (!dateVal) {
+      showError('incident_date', 'Incident date is required.'); ok = false;
+    } else {
+      const today = new Date(); today.setHours(0,0,0,0);
+      const chosen = new Date(dateVal);
+      if (chosen > today) {
+        showError('incident_date', 'Incident date cannot be in the future.'); ok = false;
+      } else {
+        const tenYearsAgo = new Date(); tenYearsAgo.setFullYear(tenYearsAgo.getFullYear() - 10);
+        if (chosen < tenYearsAgo) { showError('incident_date', 'Incident date seems too far in the past.'); ok = false; }
+        else clearError('incident_date');
+      }
+    }
+
+    // Location
+    const loc = document.getElementById('incident_location').value.trim();
+    if (!loc || loc.length < 5) {
+      showError('incident_location', 'Please enter a valid incident location (at least 5 characters).'); ok = false;
+    } else clearError('incident_location');
+
+    // Incident type
+    if (!selectedValues['incident_type_group']) {
+      document.getElementById('err-incident_type').textContent = 'Please select an incident type.';
+      document.getElementById('err-incident_type').classList.add('visible');
+      document.getElementById('incident_type_group').classList.add('is-invalid');
+      ok = false;
+    }
+
+    // Description
+    const desc = document.getElementById('incident_description').value;
+    if (!desc.trim()) {
+      showError('incident_description', 'Please describe what happened.'); ok = false;
+    } else if (!isMeaningful(desc)) {
+      showError('incident_description', 'Description must be meaningful — use at least 3 proper words.'); ok = false;
+    } else if (countSentences(desc) > 2) {
+      showError('incident_description', 'Description must not exceed 2 sentences. Please shorten it.'); ok = false;
+    } else clearError('incident_description');
+
+    // Injury description if injuries reported
+    if (document.getElementById('injuries_reported').value === 'true') {
+      const inj = document.getElementById('injury_description').value;
+      if (!inj.trim()) {
+        showError('injury_description', 'Please describe the injuries reported.'); ok = false;
+      } else if (!isMeaningful(inj)) {
+        showError('injury_description', 'Injury description must be meaningful — at least 3 proper words.'); ok = false;
+      } else if (countSentences(inj) > 2) {
+        showError('injury_description', 'Injury description must not exceed 2 sentences.'); ok = false;
+      } else clearError('injury_description');
+    }
+
+    // Police report number if filed
+    if (document.getElementById('police_filed').value === 'true') {
+      const prn = document.getElementById('police_report_number').value.trim();
+      if (!prn || prn.length < 4) {
+        showError('police_report_number', 'Please provide the police report reference number.'); ok = false;
+      } else clearError('police_report_number');
+    }
+
+    // Third party phone if visible
+    if (document.getElementById('third_party_involved').value === 'true') {
+      const tpPhone = document.getElementById('tp_phone').value;
+      const phoneErr = validatePhone(tpPhone);
+      if (phoneErr) { showError('tp_phone', phoneErr); ok = false; }
+      const tpName = document.getElementById('tp_name').value.trim();
+      const tpPlate = document.getElementById('tp_plate').value.trim();
+      if (!tpName && !tpPlate) {
+        showError('tp_name', 'Please provide the third party\'s name or license plate.'); ok = false;
+      }
+    }
+
+    if (!ok) showToast('Please fix the errors highlighted in red before continuing.', 'error');
+    return ok;
+  }
+
+  function validateStep2() {
+    let ok = true;
+    if (!document.getElementById('policy_id').value) {
+      showError('policy_id', 'Please select a policy.'); ok = false;
+    }
+    if (!document.getElementById('vehicle_id').value) {
+      showError('vehicle_id', 'Please select a vehicle.'); ok = false;
+    }
+    const amt = document.getElementById('claimed_amount').value;
+    if (amt !== '') {
+      const v = parseFloat(amt);
+      if (isNaN(v) || v <= 0) { showError('claimed_amount', 'Claimed amount must be greater than zero.'); ok = false; }
+      else if (v > 10000000)  { showError('claimed_amount', 'Claimed amount exceeds the maximum allowed.'); ok = false; }
+    }
+    if (!ok) showToast('Please fix the errors highlighted in red before continuing.', 'error');
+    return ok;
+  }
+
+  // ─────────────────────────────────────────────────────────────────
+  // OTHER EXISTING FUNCTIONS (unchanged)
+  // ─────────────────────────────────────────────────────────────────
+
+  async function loadFormData() {
+    try {
+      const [pRes, vRes] = await Promise.all([apiFetch('/policies/'), apiFetch('/vehicles/')]);
+      if (pRes) {
+        const data = await pRes.json();
+        const policies = data.results || data;
+        const sel = document.getElementById('policy_id');
+        policies.forEach(p => {
+          if (p.status === 'ACTIVE') {
+            sel.innerHTML += `<option value="${p.id}" data-vehicle="${p.vehicle}">${p.policy_number} — ${p.cover_type?.replace('_',' ')}</option>`;
+          }
+        });
+        window._policies = policies;
+      }
+      if (vRes) {
+        const data = await vRes.json();
+        const vehicles = data.results || data;
+        const sel = document.getElementById('vehicle_id');
+        vehicles.forEach(v => {
+          sel.innerHTML += `<option value="${v.id}">${v.year} ${v.make} ${v.model} (${v.license_plate})</option>`;
+        });
+        window._vehicles = vehicles;
+      }
+    } catch(e) {}
+  }
+
+  function onPolicyChange() {
+    const sel = document.getElementById('policy_id');
+    const opt = sel.options[sel.selectedIndex];
+    if (!opt.value) return;
+    const policy = (window._policies || []).find(p => p.id === opt.value);
+    if (policy) {
+      document.getElementById('vehicle_id').value = policy.vehicle || '';
+    }
+  }
+
+  function selectRadio(groupId, value, el) {
+    document.querySelectorAll('#' + groupId + ' .radio-card').forEach(c => c.classList.remove('selected'));
+    el.classList.add('selected');
+    selectedValues[groupId] = value;
+    // Clear radio error when user selects
+    const errEl = document.getElementById('err-' + (groupId === 'incident_type_group' ? 'incident_type' : groupId));
+    if (errEl) { errEl.classList.remove('visible'); }
+    document.getElementById(groupId).classList.remove('is-invalid');
+  }
+
+  function togglePoliceNum() {
+    document.getElementById('police-num-wrap').classList.toggle('show', document.getElementById('police_filed').value === 'true');
+    if (document.getElementById('police_filed').value !== 'true') resetField('police_report_number');
+  }
+  function toggleInjuries() {
+    document.getElementById('injuries-wrap').classList.toggle('show', document.getElementById('injuries_reported').value === 'true');
+    if (document.getElementById('injuries_reported').value !== 'true') resetField('injury_description');
+  }
+  function toggleThirdParty() {
+    document.getElementById('third-party-wrap').classList.toggle('show', document.getElementById('third_party_involved').value === 'true');
+    if (document.getElementById('third_party_involved').value !== 'true') {
+      ['tp_name','tp_phone','tp_plate'].forEach(resetField);
+    }
+  }
+
+  function handleFileSelect(e, type) { addFiles(Array.from(e.target.files), type); }
+
+  function addFiles(files, type) {
+    if (!uploadedFiles[type]) uploadedFiles[type] = [];
+    const container = document.getElementById('files-' + type);
+    files.forEach(file => {
+      uploadedFiles[type].push(file);
+      const thumb = document.createElement('div');
+      thumb.className = 'file-thumb';
+      if (file.type.startsWith('image/')) {
+        const reader = new FileReader();
+        reader.onload = e => { thumb.innerHTML = '<img src="' + e.target.result + '"/>'; };
+        reader.readAsDataURL(file);
+      } else {
+        thumb.innerHTML = '📄';
+      }
+      const removeBtn = document.createElement('button');
+      removeBtn.className = 'remove-file';
+      removeBtn.textContent = '×';
+      removeBtn.onclick = () => {
+        uploadedFiles[type] = uploadedFiles[type].filter(f => f !== file);
+        thumb.remove();
+      };
+      thumb.appendChild(removeBtn);
+      container.appendChild(thumb);
+    });
+  }
+
+  function buildReview() {
+    const rows = [
+      ['Incident Date',       document.getElementById('incident_date').value],
+      ['Incident Time',       document.getElementById('incident_time').value || '—'],
+      ['Location',            document.getElementById('incident_location').value],
+      ['Incident Type',       selectedValues['incident_type_group'] || '—'],
+      ['Fault',               selectedValues['fault_group'] || '—'],
+      ['Description',         document.getElementById('incident_description').value],
+      ['Police Report Filed', document.getElementById('police_filed').value === 'true' ? 'Yes' : 'No'],
+      ['Claimed Amount',      document.getElementById('claimed_amount').value ? 'USD ' + document.getElementById('claimed_amount').value : '—'],
+    ];
+    document.getElementById('review-content').innerHTML = rows.map(function(r) {
+      return '<div class="review-row"><div class="review-key">' + r[0] + '</div><div class="review-val">' + r[1] + '</div></div>';
+    }).join('');
+  }
+
+  async function submitClaim() {
+    const btn = document.getElementById('submit-btn');
+    btn.textContent = '⏳ Submitting…'; btn.disabled = true;
+
+    const payload = {
+      policy:               document.getElementById('policy_id').value,
+      vehicle:              document.getElementById('vehicle_id').value,
+      incident_type:        selectedValues['incident_type_group'],
+      fault_type:           selectedValues['fault_group'] || 'UNKNOWN',
+      incident_date:        document.getElementById('incident_date').value,
+      incident_time:        document.getElementById('incident_time').value || null,
+      incident_location:    document.getElementById('incident_location').value,
+      incident_description: document.getElementById('incident_description').value,
+      police_report_filed:  document.getElementById('police_filed').value === 'true',
+      police_report_number: document.getElementById('police_report_number').value,
+      injuries_reported:    document.getElementById('injuries_reported').value === 'true',
+      injury_description:   document.getElementById('injury_description').value,
+      third_party_involved: document.getElementById('third_party_involved').value === 'true',
+      third_party_name:     document.getElementById('tp_name').value,
+      third_party_phone:    document.getElementById('tp_phone').value,
+      third_party_license_plate: document.getElementById('tp_plate').value,
+      third_party_insurer:  document.getElementById('tp_insurer').value,
+      claimed_amount:       document.getElementById('claimed_amount').value || null,
+    };
+
+    try {
+      const res = await apiFetch('/claims/', { method: 'POST', body: JSON.stringify(payload) });
+      if (!res) return;
+      const data = await res.json();
+      if (res.ok) {
+        const claimId = data.id;
+
+        // 1. Upload documents
+        for (const [type, files] of Object.entries(uploadedFiles)) {
+          for (const file of files) {
+            const fd = new FormData();
+            fd.append('file', file);
+            fd.append('document_type', type);
+            await fetch(API + '/claims/' + claimId + '/documents/upload/', {
+              method: 'POST',
+              headers: { 'Authorization': 'Bearer ' + getToken() },
+              body: fd
+            });
+          }
+        }
+
+        // 2. Save AI assessment to backend if we have a result
+        if (aiAssessmentResult) {
+          const r = aiAssessmentResult;
+          const overallSeverity = (r.damages || []).reduce((worst, d) => {
+            const order = { 'Minor': 1, 'Moderate': 2, 'Severe': 3 };
+            return (order[d.severity] || 0) > (order[worst] || 0) ? d.severity : worst;
+          }, 'Minor');
+          const severityMap = { 'Minor': 'MINOR', 'Moderate': 'MODERATE', 'Severe': 'SEVERE' };
+
+          await apiFetch('/claims/' + claimId + '/assessments/', {
+            method: 'POST',
+            body: JSON.stringify({
+              assessment_type:    'AI_INITIAL',
+              damage_description: r.summary || 'AI damage assessment',
+              damage_severity:    severityMap[overallSeverity] || 'MINOR',
+              damaged_parts:      r.damages || [],
+              parts_cost:         r.total_cost_usd || 0,
+              labour_cost:        0,
+              paint_cost:         0,
+              other_costs:        0,
+              total_estimate:     r.total_cost_usd || 0,
+              notes:              'Auto-generated by Claude AI on submission.',
+            })
+          });
+        }
+
+        showToast('Claim ' + data.claim_number + ' submitted successfully!');
+        setTimeout(() => window.location.href = '/track-claim/', 1500);
+      } else {
+        showToast(Object.values(data).flat().join(' ') || 'Submission failed', 'error');
+        btn.textContent = '🚀 Submit Claim'; btn.disabled = false;
+      }
+    } catch(e) {
+      showToast('Connection error. Please try again.', 'error');
+      btn.textContent = '🚀 Submit Claim'; btn.disabled = false;
+    }
+  }
+
+  loadFormData();
+  attachLiveValidation();
+</script>
+{% endverbatim %}
+</body>
+</html>
