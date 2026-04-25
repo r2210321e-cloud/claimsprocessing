@@ -3,7 +3,7 @@ from pathlib import Path
 from datetime import timedelta
 from decouple import config
 
-os.environ.setdefault('GEMINI_API_KEY', 'AIzaSyCtJLOWBW33NPoXJrIGHjaA6Gu6J7Iq1jI')
+
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
