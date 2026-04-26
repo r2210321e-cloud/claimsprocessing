@@ -5,14 +5,19 @@ from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.views import TokenRefreshView
 from rest_framework_simplejwt.exceptions import TokenError
+from rest_framework.permissions import AllowAny
 
+from django.utils.decorators import method_decorator
+from django.views.decorators.csrf import csrf_exempt
 from django.contrib.auth import authenticate
 from django.db.models import Count, Sum, Avg, Q
 from django.utils import timezone
 from django.shortcuts import get_object_or_404
 from django.core.mail import send_mail
 from django.conf import settings
-
+from rest_framework.throttling import UserRateThrottle
+from .ai_service import analyze_images
+import logging
 import uuid
 
 from .models import User, Vehicle, Policy, Claim, ClaimDocument, ClaimAssessment, Notification, AuditLog
@@ -28,7 +33,7 @@ from .serializers import (
 from .permissions import IsClientUser, IsAdjusterOrAdmin, IsOwnerOrAdmin
 from .tasks import send_claim_notification_email
 from .ai_service import run_ai_assessment
-
+from .email_service import send_email
 
 # ─────────────────────────────────────────────────────────────────────────────
 # HELPERS
@@ -1167,47 +1172,12 @@ class MonthlyReportView(APIView):
 
 
 # ── 4. EMAIL HELPER (used by decision view + registration) ────────────────────
- 
-def _send_email_to_user(recipient, subject, body, notification_type, claim=None):
-    """
-    Sends an email to a user via Django's email backend (configured for Gmail SMTP).
-    Also creates a Notification record for audit purposes.
- 
-    Args:
-        recipient         (User)   : The User to notify.
-        subject           (str)    : Email subject line.
-        body              (str)    : Plain-text email body.
-        notification_type (str)    : Notification.NotificationType choice.
-        claim             (Claim|None): Related claim (can be None).
-    """
-    # 1. Create notification record (always, even if email fails)
-    notification = Notification.objects.create(
-        recipient=recipient,
-        claim=claim,
-        notification_type=notification_type,
-        channel=Notification.Channel.EMAIL,
+def _send_email_to_user(recipient, subject, body, **kwargs):
+    send_email(
+        recipient_email=recipient.email,
         subject=subject,
-        body=body,
-        delivery_status=Notification.DeliveryStatus.PENDING,
+        body=body
     )
- 
-    # 2. Attempt to send via SMTP
-    try:
-        send_mail(
-            subject=subject,
-            message=body,
-            from_email=settings.DEFAULT_FROM_EMAIL,
-            recipient_list=[recipient.email],
-            fail_silently=False,
-        )
-        notification.mark_sent()
-    except Exception as exc:
-        notification.mark_failed(error=str(exc))
-        # Log but don't raise — we never want an email failure to break the API response
-        import logging
-        logging.getLogger(__name__).error(
-            f'Email send failed to {recipient.email}: {exc}'
-        )
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -1217,108 +1187,55 @@ def _send_email_to_user(recipient, subject, body, notification_type, claim=None)
 # Receives base64 images, calls Anthropic, returns structured JSON.
 # ─────────────────────────────────────────────────────────────────────────────
 
+logger = logging.getLogger(__name__)
+
+
+class AIAssessmentThrottle(UserRateThrottle):
+    rate = "5/min"
+
+@method_decorator(csrf_exempt, name='dispatch') 
 class AIAssessmentProxyView(APIView):
     """
     POST /api/claims/ai-assess/
-    Proxies damage photo analysis to Anthropic Claude.
-    No claim ID needed — this runs BEFORE the claim is submitted.
 
-    Request body:
-    {
-        "images": [
-            { "type": "image", "source": { "type": "base64", "media_type": "image/jpeg", "data": "..." } },
-            ...
-        ]
-    }
-
-    Response:
-    {
-        "damages": [{"part": "Bumper", "severity": "Moderate", "description": "...", "cost_usd": 400}],
-        "total_cost_usd": 400,
-        "summary": "..."
-    }
+    Runs AI damage analysis BEFORE claim submission.
+    Uses centralized AI service (rate-safe + cached).
     """
-    permission_classes = [permissions.IsAuthenticated]
-
+    permission_classes = [AllowAny]
+    authentication_classes = []
     def post(self, request):
-        import os, json as _json, logging, urllib.request
-        logger = logging.getLogger(__name__)
+        images = request.data.get("images", [])
 
-        images = request.data.get('images', [])
         if not images:
-            return Response({'detail': 'No images provided.'}, status=status.HTTP_400_BAD_REQUEST)
+            return Response(
+                {"detail": "No images provided."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
 
-        api_key = os.environ.get("GEMINI_API_KEY")
-        if not api_key:
-            logger.error("GEMINI_API_KEY is not set in environment")
-            return Response({'detail': 'AI service not configured — GEMINI_API_KEY missing.'}, status=status.HTTP_502_BAD_GATEWAY)
+        try:
+            result = analyze_images(images)
 
-        PROMPT = (
-            'You are an expert automotive damage assessor for Zimnat Insurance in Zimbabwe. '
-            'Analyse the uploaded car damage photo(s). '
-            'Respond ONLY with this exact JSON — no markdown, no extra text: '
-            '{"damages":[{"part":"Front Bumper","severity":"Moderate","description":"Cracked and displaced","cost_usd":450}],'
-            '"total_cost_usd":450,"summary":"Brief 1-sentence summary."}'
-        )
+            return Response({
+            "damages": result.get("damaged_parts", []),
+            "total_cost_usd": result.get("total_estimate_usd"),
+            "summary": result.get("damage_description")
+    }, status=status.HTTP_200_OK)
 
-        # Build Gemini parts: images first, then prompt text
-        parts = []
-        for img in images[:5]:
-            try:
-                src = img.get('source', {})
-                parts.append({
-                    "inline_data": {
-                        "mime_type": src.get("media_type", "image/jpeg"),
-                        "data": src.get("data", ""),
-                    }
-                })
-            except Exception:
-                continue
+        except ValueError as e:
+            return Response(
+                {"detail": str(e)},
+                status=status.HTTP_400_BAD_REQUEST
+            )
 
-        if not parts:
-            return Response({'detail': 'Could not read image data.'}, status=status.HTTP_400_BAD_REQUEST)
+        except Exception as e:
+            logger.error(f"AIAssessmentProxyView error: {e}")
 
-        parts.append({"text": PROMPT})
-
-        import time
-        url  = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={api_key}"
-        body = _json.dumps({
-            "contents": [{"parts": parts}],
-            "generationConfig": {"temperature": 0.1, "maxOutputTokens": 1024},
-        }).encode("utf-8")
-
-        # Retry up to 3 times with a wait on 429 rate limit
-        last_error = None
-        for attempt in range(3):
-            try:
-                req = urllib.request.Request(url, data=body, headers={"Content-Type": "application/json"}, method="POST")
-                with urllib.request.urlopen(req, timeout=60) as resp:
-                    result = _json.loads(resp.read().decode("utf-8"))
-                raw = result["candidates"][0]["content"]["parts"][0]["text"]
-                raw = raw.replace("```json", "").replace("```", "").strip()
-                parsed = _json.loads(raw)
-                return Response(parsed)
-            except urllib.error.HTTPError as e:
-                if e.code == 429:
-                    wait = (attempt + 1) * 10  # wait 10s, 20s, 30s
-                    logger.warning(f"Gemini rate limited, waiting {wait}s (attempt {attempt+1})")
-                    time.sleep(wait)
-                    last_error = f"Rate limited — please wait a moment and try again"
-                    continue
-                else:
-                    body_text = e.read().decode("utf-8") if hasattr(e, 'read') else str(e)
-                    logger.error(f"Gemini HTTP error {e.code}: {body_text}")
-                    return Response({'detail': f'AI assessment failed: HTTP {e.code}'}, status=status.HTTP_502_BAD_GATEWAY)
-            except _json.JSONDecodeError as e:
-                logger.error(f"Gemini JSON parse error: {e}")
-                return Response({'detail': f'AI returned unexpected format'}, status=status.HTTP_502_BAD_GATEWAY)
-            except Exception as e:
-                logger.error(f"AIAssessmentProxyView error: {type(e).__name__}: {e}")
-                return Response({'detail': f'AI assessment failed: {str(e)}'}, status=status.HTTP_502_BAD_GATEWAY)
-
-        return Response({'detail': last_error or 'AI service busy — please try again in a moment.'}, status=status.HTTP_429_TOO_MANY_REQUESTS)
-
-
+            # graceful fallback (NO hard failure)
+            return Response({
+                "damages": [],
+                "total_cost_usd": None,
+                "summary": "AI service temporarily busy. Please retry shortly."
+            }, status=status.HTTP_200_OK)
 
 # ─────────────────────────────────────────────────────────────────────────────
 # USER MANAGEMENT VIEWS (Admin only)
