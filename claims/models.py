@@ -100,6 +100,10 @@ class User(AbstractBaseUser, PermissionsMixin):
     password_reset_token   = models.UUIDField(null=True, blank=True)
     password_reset_expires = models.DateTimeField(null=True, blank=True)
 
+    # Brute-force lockout
+    failed_login_attempts = models.PositiveIntegerField(default=0)
+    account_locked_until  = models.DateTimeField(null=True, blank=True)
+
     objects = UserManager()
 
     USERNAME_FIELD  = 'email'
@@ -119,6 +123,26 @@ class User(AbstractBaseUser, PermissionsMixin):
 
     def get_short_name(self):
         return self.first_name
+
+    def is_locked(self):
+        """Return True if the account is currently locked out."""
+        if self.account_locked_until and timezone.now() < self.account_locked_until:
+            return True
+        return False
+
+    def increment_failed_login(self, max_attempts=5, lockout_minutes=30):
+        """Increment failed login counter; lock account when limit is reached."""
+        self.failed_login_attempts += 1
+        if self.failed_login_attempts >= max_attempts:
+            self.account_locked_until = timezone.now() + timezone.timedelta(minutes=lockout_minutes)
+        self.save(update_fields=['failed_login_attempts', 'account_locked_until'])
+
+    def reset_failed_login(self):
+        """Clear the failed counter and any lockout after a successful login."""
+        if self.failed_login_attempts > 0 or self.account_locked_until:
+            self.failed_login_attempts = 0
+            self.account_locked_until  = None
+            self.save(update_fields=['failed_login_attempts', 'account_locked_until'])
 
     @property
     def is_client(self):

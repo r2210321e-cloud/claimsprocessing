@@ -562,6 +562,7 @@ class ClaimListSerializer(serializers.ModelSerializer):
             'vehicle', 'vehicle_display', 'incident_type', 'incident_date',
             'status', 'claimed_amount', 'approved_amount',
             'submitted_at', 'processing_days', 'created_at',
+            'ai_fraud_score',
         ]
 
     def get_client_name(self, obj):

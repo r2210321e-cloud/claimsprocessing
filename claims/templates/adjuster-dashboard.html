@@ -19,7 +19,7 @@
 
   .claim-row {
     display:grid;
-    grid-template-columns: 2fr 1fr 1fr 1fr 1fr 120px;
+    grid-template-columns: 2fr 1fr 1fr 1fr 120px;
     align-items:center;
     padding:14px 16px;
     border-bottom:1px solid var(--gray-100);
@@ -170,7 +170,6 @@
           <div>Claim</div>
           <div>Client</div>
           <div>Incident</div>
-          <div>AI Estimate</div>
           <div>Status</div>
           <div>Action</div>
         </div>
@@ -306,7 +305,7 @@
       const matchFilter = currentFilter === 'ALL' || c.status === currentFilter;
       const matchSearch = !currentSearch ||
         (c.claim_number||'').toLowerCase().includes(currentSearch) ||
-        (c.vehicle?.license_plate||'').toLowerCase().includes(currentSearch) ||
+        (c.vehicle_info?.license_plate||'').toLowerCase().includes(currentSearch) ||
         (c.client_name||'').toLowerCase().includes(currentSearch);
       return matchFilter && matchSearch;
     });
@@ -322,11 +321,6 @@
 
     list.innerHTML = claims.map(c => {
       const color = STATUS_COLORS[c.status] || '#9ca3af';
-      const estimate = c.ai_estimated_repair
-        ? 'USD ' + parseFloat(c.ai_estimated_repair).toLocaleString()
-        : c.claimed_amount
-          ? 'USD ' + parseFloat(c.claimed_amount).toLocaleString()
-          : '—';
       const canDecide = ['SUBMITTED','UNDER_REVIEW'].includes(c.status);
 
       return `<div class="claim-row" onclick="openClaim('${c.id}')">
@@ -336,7 +330,6 @@
         </div>
         <div style="font-size:13px;color:var(--gray-700)">${c.client_name || c.client?.full_name || '—'}</div>
         <div style="font-size:13px;color:var(--gray-600)">${formatDate(c.incident_date)}</div>
-        <div style="font-size:13px;font-weight:600;color:var(--green-dark)">${estimate}</div>
         <div>
           <span style="display:inline-block;padding:3px 10px;border-radius:20px;font-size:11px;font-weight:700;background:${color}22;color:${color};border:1px solid ${color}">
             ${c.status?.replace(/_/g,' ')}
@@ -399,20 +392,66 @@
 
         <div class="section-title">🚗 Vehicle</div>
         <div class="info-grid">
-          <div class="info-item"><div class="il">Vehicle</div><div class="iv">${claim.vehicle?.year||''} ${claim.vehicle?.make||''} ${claim.vehicle?.model||''}</div></div>
-          <div class="info-item"><div class="il">Plate</div><div class="iv">${claim.vehicle?.license_plate||'—'}</div></div>
-          <div class="info-item"><div class="il">Colour</div><div class="iv">${claim.vehicle?.color||'—'}</div></div>
-          <div class="info-item"><div class="il">Body Type</div><div class="iv">${claim.vehicle?.body_type||'—'}</div></div>
+          <div class="info-item"><div class="il">Vehicle</div><div class="iv">${claim.vehicle_info?.year||''} ${claim.vehicle_info?.make||''} ${claim.vehicle_info?.model||''}</div></div>
+          <div class="info-item"><div class="il">Plate</div><div class="iv">${claim.vehicle_info?.license_plate||'—'}</div></div>
+          <div class="info-item"><div class="il">Colour</div><div class="iv">${claim.vehicle_info?.color||'—'}</div></div>
+          <div class="info-item"><div class="il">Body Type</div><div class="iv">${claim.vehicle_info?.body_type||'—'}</div></div>
         </div>
 
         <div class="section-title">📄 Policy & Amounts</div>
         <div class="info-grid">
-          <div class="info-item"><div class="il">Policy</div><div class="iv">${claim.policy?.policy_number||'—'}</div></div>
-          <div class="info-item"><div class="il">Cover</div><div class="iv">${(claim.policy?.cover_type||'').replace(/_/g,' ')}</div></div>
-          <div class="info-item"><div class="il">Sum Insured</div><div class="iv">USD ${parseFloat(claim.policy?.sum_insured||0).toLocaleString()}</div></div>
-          <div class="info-item"><div class="il">Excess</div><div class="iv">USD ${parseFloat(claim.policy?.excess_amount||0).toLocaleString()}</div></div>
-          <div class="info-item"><div class="il">Claimed Amount</div><div class="iv">${claim.claimed_amount ? 'USD '+parseFloat(claim.claimed_amount).toLocaleString() : '—'}</div></div>
-          <div class="info-item"><div class="il">Client</div><div class="iv">${claim.client?.full_name||claim.client_name||'—'}</div></div>
+          <div class="info-item"><div class="il">Policy</div><div class="iv">${claim.policy_info?.policy_number||'—'}</div></div>
+          <div class="info-item"><div class="il">Cover</div><div class="iv">${(claim.policy_info?.cover_type||'').replace(/_/g,' ')}</div></div>
+          <div class="info-item"><div class="il">Sum Insured</div><div class="iv">USD ${parseFloat(claim.policy_info?.sum_insured||0).toLocaleString()}</div></div>
+          <div class="info-item"><div class="il">Excess</div><div class="iv">USD ${parseFloat(claim.policy_info?.excess_amount||0).toLocaleString()}</div></div>
+          <div class="info-item"><div class="il">Client</div><div class="iv">${claim.client_info?.full_name||claim.client_name||'—'}</div></div>
+        </div>`;
+
+      // Fraud score section
+      const fraudScore = claim.ai_fraud_score;
+      const fraudPct   = fraudScore != null ? Math.round(fraudScore * 100) : null;
+      const fraudColor = fraudScore == null ? '#6b7280'
+                       : fraudScore < 0.3   ? '#16a34a'
+                       : fraudScore < 0.7   ? '#d97706'
+                       :                      '#dc2626';
+      const fraudBg    = fraudScore == null ? '#f9fafb'
+                       : fraudScore < 0.3   ? '#f0fdf4'
+                       : fraudScore < 0.7   ? '#fffbeb'
+                       :                      '#fef2f2';
+      const fraudLabel = fraudScore == null ? '⚪ Not Calculated'
+                       : fraudScore < 0.3   ? '🟢 Low Risk'
+                       : fraudScore < 0.7   ? '🟡 Medium Risk'
+                       :                      '🔴 High Risk';
+      const fraudMsg   = fraudScore == null
+                       ? 'This claim was submitted before fraud scoring was enabled, or the score has not been calculated yet.'
+                       : fraudScore < 0.3
+                         ? 'Claim appears consistent with the reported incident.'
+                         : fraudScore < 0.7
+                           ? 'Some indicators warrant closer review before deciding.'
+                           : 'High fraud indicators detected — review carefully before approving.';
+
+      html += `
+        <div class="section-title">🛡️ Fraud Score</div>
+        <div style="background:${fraudBg};border:2px solid ${fraudColor}55;border-radius:12px;padding:16px;margin-bottom:16px">
+          <div style="display:flex;align-items:center;gap:14px;margin-bottom:${fraudPct != null ? '12px' : '0'}">
+            <div style="width:60px;height:60px;border-radius:50%;border:3px solid ${fraudColor};background:white;display:flex;align-items:center;justify-content:center;flex-shrink:0;box-shadow:0 2px 8px ${fraudColor}33">
+              <span style="font-size:14px;font-weight:800;color:${fraudColor}">${fraudPct != null ? fraudPct+'%' : 'N/A'}</span>
+            </div>
+            <div style="flex:1">
+              <div style="font-size:15px;font-weight:800;color:${fraudColor};margin-bottom:4px">${fraudLabel}</div>
+              <div style="font-size:12px;color:#6b7280;line-height:1.4">${fraudMsg}</div>
+            </div>
+          </div>
+          ${fraudPct != null ? `
+          <div style="margin-top:4px">
+            <div style="display:flex;justify-content:space-between;font-size:10px;color:#9ca3af;margin-bottom:4px">
+              <span>Low Risk</span><span>Medium</span><span>High Risk</span>
+            </div>
+            <div style="width:100%;height:10px;background:#e5e7eb;border-radius:99px;overflow:hidden">
+              <div style="width:${fraudPct}%;height:100%;background:${fraudColor};border-radius:99px;transition:width 0.6s ease"></div>
+            </div>
+            <div style="text-align:right;font-size:10px;color:${fraudColor};margin-top:3px;font-weight:700">${fraudPct}/100</div>
+          </div>` : ''}
         </div>`;
 
       // AI Assessment section

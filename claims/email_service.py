@@ -1,24 +1,26 @@
-import os
-from sendgrid import SendGridAPIClient
-from sendgrid.helpers.mail import Mail
+import logging
+from django.core.mail import send_mail
+from django.conf import settings
+
+logger = logging.getLogger(__name__)
 
 
 def send_email(recipient_email, subject, body):
+    """
+    Send an email via Gmail SMTP to the client's email address.
+    """
     try:
-        message = Mail(
-            from_email='abelrevelation@gmail.com',
-            to_emails=recipient_email,
+        send_mail(
             subject=subject,
-            html_content=body.replace('\n', '<br>')
+            message=body,
+            from_email=settings.DEFAULT_FROM_EMAIL,
+            recipient_list=[recipient_email],  # ← goes to client's email
+            html_message=body.replace('\n', '<br>'),
+            fail_silently=False,
         )
-
-        api_key = os.environ.get('SENDGRID_API_KEY')
-        if not api_key:
-            
-            return
-
-        sg = SendGridAPIClient(api_key)
-        sg.send(message)
+        logger.info("Email sent to %s | Subject: %s", recipient_email, subject)
+        return True
 
     except Exception as e:
-        print(f"Email failed: {e}")
+        logger.error("Email FAILED to %s | Subject: %s | Error: %s", recipient_email, subject, str(e))
+        return False

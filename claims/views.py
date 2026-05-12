@@ -338,9 +338,9 @@ class ClaimListCreateView(generics.ListCreateAPIView):
             qs = qs.filter(client=user)
         elif user.is_adjuster:
             qs = qs.filter(assigned_adjuster=user)
-        # Admin sees all
+       
 
-        # Filter by status
+        
         status_filter = self.request.query_params.get('status')
         if status_filter:
             qs = qs.filter(status=status_filter.upper())
@@ -352,10 +352,10 @@ class ClaimListCreateView(generics.ListCreateAPIView):
         log_action(self.request.user, AuditLog.Action.SUBMIT, 'Claim', claim.id,
                    f'Claim submitted: {claim.claim_number}', self.request)
 
-        # Auto-assign to adjuster with the lightest workload
+       
         _auto_assign_adjuster(claim)
 
-        # Trigger notification
+        
         Notification.objects.create(
             recipient=self.request.user,
             claim=claim,
@@ -364,11 +364,11 @@ class ClaimListCreateView(generics.ListCreateAPIView):
             body=f'Dear {self.request.user.get_full_name()}, your claim {claim.claim_number} has been received and is being processed.',
         )
 
-        # ── AI Assessment ──────────────────────────────────────────────────────────
+        
         try:
             run_ai_assessment(claim)
         except Exception:
-            pass  # Never let AI failure block claim submission
+            pass  
 
 
 class ClaimDetailView(generics.RetrieveUpdateAPIView):
@@ -410,7 +410,7 @@ class ClaimDecisionView(APIView):
     def post(self, request, pk):
         claim = get_object_or_404(Claim, pk=pk)
  
-        # Only allow decisions on claims in a decidable state
+        
         if claim.status not in [Claim.Status.SUBMITTED, Claim.Status.UNDER_REVIEW]:
             return Response(
                 {'detail': f'Cannot decide on a claim with status: {claim.get_status_display()}'},
@@ -1230,7 +1230,7 @@ class AIAssessmentProxyView(APIView):
         except Exception as e:
             logger.error(f"AIAssessmentProxyView error: {e}")
 
-            # graceful fallback (NO hard failure)
+            
             return Response({
                 "damages": [],
                 "total_cost_usd": None,
