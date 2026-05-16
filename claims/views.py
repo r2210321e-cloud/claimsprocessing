@@ -383,6 +383,13 @@ class ClaimDetailView(generics.RetrieveUpdateAPIView):
             return qs.filter(client=user)
         return qs.all()
 
+    def get_serializer_context(self):
+        # Ensures ClaimDocumentSerializer.get_file_url() receives the request
+        # so it can build absolute URLs for document files (photos, police report, etc.)
+        context = super().get_serializer_context()
+        context['request'] = self.request
+        return context
+
 
 class ClaimDecisionView(APIView):
     """
@@ -619,10 +626,15 @@ class ClaimAssignAdjusterView(APIView):
 # ─────────────────────────────────────────────────────────────────────────────
 
 class ClaimDocumentUploadView(generics.CreateAPIView):
-    """POST /api/claims/<claim_id>/documents/ — Upload a document."""
+    """POST /api/claims/<claim_id>/documents/upload/ — Upload a document."""
     serializer_class   = ClaimDocumentUploadSerializer
     permission_classes = [permissions.IsAuthenticated]
     parser_classes     = [MultiPartParser, FormParser]
+
+    def get_serializer_context(self):
+        context = super().get_serializer_context()
+        context['request'] = self.request
+        return context
 
     def perform_create(self, serializer):
         claim = get_object_or_404(Claim, pk=self.kwargs['claim_id'])
@@ -663,6 +675,11 @@ class ClaimDocumentListView(generics.ListAPIView):
         if user.is_client and claim.client != user:
             return ClaimDocument.objects.none()
         return ClaimDocument.objects.filter(claim=claim)
+
+    def get_serializer_context(self):
+        context = super().get_serializer_context()
+        context['request'] = self.request
+        return context
 
 
 # ─────────────────────────────────────────────────────────────────────────────

@@ -128,8 +128,6 @@ def analyze_images(images: list) -> dict:
         logger.error(f"Bad AI JSON: {raw_text}")
         raise ValueError("AI returned invalid JSON")
 
-    data = json.loads(raw_text)
-
     cache.set(cache_key, data, timeout=300)
 
     return data

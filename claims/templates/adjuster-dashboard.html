@@ -135,7 +135,31 @@
     padding:6px 14px; background:white;
   }
   .search-wrap input { border:none; outline:none; font-size:13px; width:160px; font-family:'DM Sans',sans-serif; }
+
+  /* Image gallery in modal */
+  .img-gallery-modal { display:grid; grid-template-columns:repeat(3,1fr); gap:8px; margin:8px 0 16px; }
+  .img-thumb-m {
+    width:100%; aspect-ratio:4/3; object-fit:cover; border-radius:8px;
+    cursor:pointer; border:2px solid transparent; transition:all 0.2s;
+  }
+  .img-thumb-m:hover { border-color:var(--green-main); transform:scale(1.03); }
+
+  /* Lightbox */
+  .lightbox {
+    display:none; position:fixed; inset:0; z-index:1200;
+    background:rgba(0,0,0,0.9); align-items:center; justify-content:center; padding:24px;
+  }
+  .lightbox.open { display:flex; flex-direction:column; }
+  .lightbox img { max-width:100%; max-height:82vh; border-radius:10px; object-fit:contain; }
+  .lightbox-caption { color:white; font-size:13px; margin-top:10px; opacity:0.7; }
+  .lightbox-close { position:absolute; top:18px; right:22px; color:white; font-size:28px; cursor:pointer; background:none; border:none; }
+
+  /* Fraud factors */
+  .fraud-factors { list-style:none; padding:0; margin:8px 0 0; }
+  .fraud-factors li { font-size:12px; padding:5px 0; border-bottom:1px solid rgba(0,0,0,0.06); display:flex; gap:8px; align-items:flex-start; color:#374151; }
+  .fraud-factors li:last-child { border-bottom:none; }
 </style>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 </head>
 <body>
 <div class="main-content">
@@ -147,6 +171,30 @@
       <div class="stat-card"><div class="stat-icon">🔍</div><div><div class="stat-num" id="s-pending">—</div><div class="stat-lbl">Pending Review</div></div></div>
       <div class="stat-card"><div class="stat-icon">✅</div><div><div class="stat-num" id="s-approved">—</div><div class="stat-lbl">Approved</div></div></div>
       <div class="stat-card"><div class="stat-icon">❌</div><div><div class="stat-num" id="s-declined">—</div><div class="stat-lbl">Declined</div></div></div>
+    </div>
+
+    <!-- Charts row -->
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:22px;margin-bottom:24px">
+      <!-- Claims by status doughnut -->
+      <div class="card">
+        <div class="card-header"><div class="card-title">Claims by Status</div></div>
+        <div class="card-body" style="display:flex;align-items:center;gap:24px">
+          <div style="position:relative;height:160px;width:160px;flex-shrink:0">
+            <canvas id="adj-doughnut"></canvas>
+          </div>
+          <div id="adj-doughnut-legend" style="flex:1"></div>
+        </div>
+      </div>
+
+      <!-- Claims by incident type bar -->
+      <div class="card">
+        <div class="card-header"><div class="card-title">Claims by Incident Type</div></div>
+        <div class="card-body">
+          <div style="position:relative;height:160px">
+            <canvas id="adj-bar"></canvas>
+          </div>
+        </div>
+      </div>
     </div>
 
     <div class="card">
@@ -244,6 +292,13 @@
   </div>
 </div>
 
+<!-- Lightbox -->
+<div class="lightbox" id="lb" onclick="closeLb()">
+  <button class="lightbox-close" onclick="closeLb()">✕</button>
+  <img id="lb-img" src="" alt="Claim photo"/>
+  <div class="lightbox-caption" id="lb-cap"></div>
+</div>
+
 <script src="{% static 'shared.js' %}"></script>
 {% verbatim %}
 <script>
@@ -281,6 +336,7 @@
         const data = await claimsRes.json();
         allClaims = data.results || data;
         renderClaims();
+        renderAdjCharts(allClaims);
       }
     } catch(e) {
       document.getElementById('claims-list').innerHTML =
@@ -358,15 +414,25 @@
     hideDecisionForms();
 
     try {
-      const [claimRes, assessRes] = await Promise.all([
+      const [claimRes, assessRes, docsRes] = await Promise.all([
         apiFetch(`/claims/${claimId}/`),
-        apiFetch(`/claims/${claimId}/assessments/`)
+        apiFetch(`/claims/${claimId}/assessments/`),
+        apiFetch(`/claims/${claimId}/documents/`),
       ]);
 
       const claim = await claimRes.json();
       const assessData = await assessRes.json();
       const assessments = assessData.results || assessData;
       const aiAssessment = assessments.find(a => a.assessment_type === 'AI_INITIAL');
+
+      // Merge documents from both the nested claim response AND the dedicated endpoint
+      if (!Array.isArray(claim.documents)) claim.documents = [];
+      if (docsRes && docsRes.ok) {
+        const docsData = await docsRes.json();
+        const extraDocs = docsData.results || docsData;
+        const existingIds = new Set(claim.documents.map(d => d.id));
+        extraDocs.forEach(d => { if (!existingIds.has(d.id)) claim.documents.push(d); });
+      }
 
       activeClaim = claim;
 
@@ -405,53 +471,6 @@
           <div class="info-item"><div class="il">Sum Insured</div><div class="iv">USD ${parseFloat(claim.policy_info?.sum_insured||0).toLocaleString()}</div></div>
           <div class="info-item"><div class="il">Excess</div><div class="iv">USD ${parseFloat(claim.policy_info?.excess_amount||0).toLocaleString()}</div></div>
           <div class="info-item"><div class="il">Client</div><div class="iv">${claim.client_info?.full_name||claim.client_name||'—'}</div></div>
-        </div>`;
-
-      // Fraud score section
-      const fraudScore = claim.ai_fraud_score;
-      const fraudPct   = fraudScore != null ? Math.round(fraudScore * 100) : null;
-      const fraudColor = fraudScore == null ? '#6b7280'
-                       : fraudScore < 0.3   ? '#16a34a'
-                       : fraudScore < 0.7   ? '#d97706'
-                       :                      '#dc2626';
-      const fraudBg    = fraudScore == null ? '#f9fafb'
-                       : fraudScore < 0.3   ? '#f0fdf4'
-                       : fraudScore < 0.7   ? '#fffbeb'
-                       :                      '#fef2f2';
-      const fraudLabel = fraudScore == null ? '⚪ Not Calculated'
-                       : fraudScore < 0.3   ? '🟢 Low Risk'
-                       : fraudScore < 0.7   ? '🟡 Medium Risk'
-                       :                      '🔴 High Risk';
-      const fraudMsg   = fraudScore == null
-                       ? 'This claim was submitted before fraud scoring was enabled, or the score has not been calculated yet.'
-                       : fraudScore < 0.3
-                         ? 'Claim appears consistent with the reported incident.'
-                         : fraudScore < 0.7
-                           ? 'Some indicators warrant closer review before deciding.'
-                           : 'High fraud indicators detected — review carefully before approving.';
-
-      html += `
-        <div class="section-title">🛡️ Fraud Score</div>
-        <div style="background:${fraudBg};border:2px solid ${fraudColor}55;border-radius:12px;padding:16px;margin-bottom:16px">
-          <div style="display:flex;align-items:center;gap:14px;margin-bottom:${fraudPct != null ? '12px' : '0'}">
-            <div style="width:60px;height:60px;border-radius:50%;border:3px solid ${fraudColor};background:white;display:flex;align-items:center;justify-content:center;flex-shrink:0;box-shadow:0 2px 8px ${fraudColor}33">
-              <span style="font-size:14px;font-weight:800;color:${fraudColor}">${fraudPct != null ? fraudPct+'%' : 'N/A'}</span>
-            </div>
-            <div style="flex:1">
-              <div style="font-size:15px;font-weight:800;color:${fraudColor};margin-bottom:4px">${fraudLabel}</div>
-              <div style="font-size:12px;color:#6b7280;line-height:1.4">${fraudMsg}</div>
-            </div>
-          </div>
-          ${fraudPct != null ? `
-          <div style="margin-top:4px">
-            <div style="display:flex;justify-content:space-between;font-size:10px;color:#9ca3af;margin-bottom:4px">
-              <span>Low Risk</span><span>Medium</span><span>High Risk</span>
-            </div>
-            <div style="width:100%;height:10px;background:#e5e7eb;border-radius:99px;overflow:hidden">
-              <div style="width:${fraudPct}%;height:100%;background:${fraudColor};border-radius:99px;transition:width 0.6s ease"></div>
-            </div>
-            <div style="text-align:right;font-size:10px;color:${fraudColor};margin-top:3px;font-weight:700">${fraudPct}/100</div>
-          </div>` : ''}
         </div>`;
 
       // AI Assessment section
@@ -494,6 +513,12 @@
             No AI assessment available for this claim.
           </div>`;
       }
+
+      // Images + Police Report — sits right under AI Assessment
+      html += buildModalImages(claim.documents || [], claim);
+
+      // Fraud risk analysis
+      html += buildModalFraud(claim);
 
       // Previous decision
       if (claim.status === 'APPROVED') {
@@ -598,6 +623,222 @@
     } catch(e) {
       showToast('Connection error. Please try again.', 'error');
       btn.disabled = false;
+    }
+  }
+
+  function openLb(src, cap) {
+    document.getElementById('lb-img').src = src;
+    document.getElementById('lb-cap').textContent = cap || '';
+    document.getElementById('lb').classList.add('open');
+  }
+  function closeLb() { document.getElementById('lb').classList.remove('open'); }
+
+  function buildModalImages(documents, claim) {
+    const allDocs = documents || [];
+
+    const photos = allDocs.filter(d => {
+      const t = (d.document_type || '').toUpperCase();
+      const url = d.file_url || d.url || '';
+      return t.includes('PHOTO') || t.includes('IMAGE') || t.includes('DAMAGE') ||
+             /\.(jpg|jpeg|png|webp|gif)/i.test(url);
+    });
+
+    const policeDocs = allDocs.filter(d => {
+      const t = (d.document_type || '').toUpperCase();
+      return t.includes('POLICE') || t.includes('REPORT');
+    });
+    const policeFileUrl = claim?.police_report_file || claim?.police_report_url || null;
+
+    const photoHtml = photos.length
+      ? `<div class="section-title">📷 Claim Photos (${photos.length}) — Click to enlarge</div>
+         <div class="img-gallery-modal" style="margin-bottom:10px">
+           ${photos.map((d,i) => {
+             const src = d.file_url || d.url || '';
+             const cap = (d.document_type||'Claim Photo').replace(/_/g,' ') + ' — Photo ' + (i+1);
+             return `<img class="img-thumb-m" src="${src}" alt="Photo ${i+1}"
+               title="${(d.document_type||'Claim Photo').replace(/_/g,' ')}"
+               onclick="openLb('${src}','${cap}')"
+               onerror="this.style.display='none'"
+             />`;
+           }).join('')}
+         </div>`
+      : `<div class="section-title">📷 Claim Photos</div>
+         <div style="background:#f9fafb;border:1px solid var(--gray-200);border-radius:8px;padding:14px;text-align:center;font-size:13px;color:var(--gray-400);margin-bottom:10px">
+           📷 No photos submitted with this claim
+         </div>`;
+
+    let policeHtml = '';
+    if (policeDocs.length || policeFileUrl) {
+      const allPolice = [...policeDocs];
+      if (policeFileUrl && !policeDocs.some(d => (d.file_url||d.url) === policeFileUrl))
+        allPolice.push({ document_type: 'POLICE_REPORT', file_url: policeFileUrl });
+
+      policeHtml = `
+        <div class="section-title" style="margin-top:4px">🚔 Police Report</div>
+        ${allPolice.map(d => {
+          const url = d.file_url || d.url || '#';
+          const isPdf = /\.pdf/i.test(url);
+          const isImg = /\.(jpg|jpeg|png|webp)/i.test(url);
+          return `<a href="${url}" target="_blank"
+            style="display:flex;align-items:center;gap:12px;padding:12px 14px;background:#f9fafb;border:1.5px solid var(--gray-200);border-radius:10px;text-decoration:none;color:var(--gray-800);font-size:13px;font-weight:600;margin-bottom:8px;transition:all 0.2s"
+            onmouseover="this.style.borderColor='var(--green-main)';this.style.background='var(--green-pale)'"
+            onmouseout="this.style.borderColor='var(--gray-200)';this.style.background='#f9fafb'">
+            <span style="font-size:22px">${isPdf ? '📄' : isImg ? '🖼️' : '📎'}</span>
+            <div>
+              <div>${(d.document_type||'Police Report').replace(/_/g,' ')}</div>
+              <div style="font-size:11px;color:var(--gray-400);margin-top:2px">Click to view · opens in new tab</div>
+            </div>
+            <span style="margin-left:auto;font-size:11px;color:var(--green-main);font-weight:700">VIEW →</span>
+          </a>`;
+        }).join('')}`;
+    } else if (claim?.police_report_filed) {
+      policeHtml = `
+        <div class="section-title" style="margin-top:4px">🚔 Police Report</div>
+        <div style="background:#f9fafb;border:1px solid var(--gray-200);border-radius:8px;padding:12px;font-size:13px;color:var(--gray-500);margin-bottom:8px">
+          Report filed (Ref: ${claim.police_report_number||'—'}) — document not yet uploaded
+        </div>`;
+    }
+
+    return photoHtml + policeHtml;
+  }
+
+  function buildModalFraud(claim) {
+    const score = claim.ai_fraud_score;
+    const pct   = score != null ? Math.round(score * 100) : null;
+    const color = score == null ? '#6b7280' : score < 0.3 ? '#16a34a' : score < 0.7 ? '#d97706' : '#dc2626';
+    const bg    = score == null ? '#f9fafb'  : score < 0.3 ? '#f0fdf4'  : score < 0.7 ? '#fffbeb'  : '#fef2f2';
+    const label = score == null ? '⚪ Not Calculated' : score < 0.3 ? '🟢 Low Risk' : score < 0.7 ? '🟡 Medium Risk' : '🔴 High Risk';
+
+    const factors = [];
+    if (score != null) {
+      if (claim.police_report_filed === false)
+        factors.push({ icon: '⚠️', text: 'No police report filed for the incident' });
+      if (claim.injuries_reported && !claim.police_report_filed)
+        factors.push({ icon: '⚠️', text: 'Injuries reported but no police report filed' });
+      if (claim.claimed_amount && claim.policy_info?.sum_insured && claim.claimed_amount / claim.policy_info.sum_insured > 0.8)
+        factors.push({ icon: '🔴', text: 'Claimed amount exceeds 80% of the sum insured' });
+      if (claim.processing_days > 30)
+        factors.push({ icon: '⚠️', text: `Claim submitted ${claim.processing_days} days after the incident` });
+      const s = claim.ai_fraud_factors || claim.fraud_factors || {};
+      if (s.prior_claims > 2)    factors.push({ icon: '🔴', text: `${s.prior_claims} prior claims on this policy` });
+      if (s.inconsistent_damage) factors.push({ icon: '🔴', text: 'Damage inconsistent with reported incident type' });
+      if (s.image_manipulation)  factors.push({ icon: '🔴', text: 'Possible image manipulation in submitted photos' });
+      if (s.staged_indicators)   factors.push({ icon: '⚠️', text: 'Damage pattern may suggest a staged accident' });
+      if (score < 0.3) {
+        factors.push({ icon: '✅', text: 'Incident details consistent with reported damage' });
+        factors.push({ icon: '✅', text: 'No anomalies detected in submitted documentation' });
+      }
+      if (!factors.length) {
+        factors.push({ icon: '🟡', text: 'Some claim details could not be fully verified automatically' });
+        factors.push({ icon: '🟡', text: 'Manual review recommended before making a decision' });
+      }
+    }
+
+    return `
+      <div class="section-title">🛡️ Fraud Risk Analysis</div>
+      <div style="background:${bg};border:2px solid ${color}44;border-radius:12px;padding:16px;margin-bottom:16px">
+        <div style="display:flex;align-items:center;gap:14px;margin-bottom:${pct != null ? '12px' : '0'}">
+          <div style="width:56px;height:56px;border-radius:50%;border:3px solid ${color};background:white;display:flex;align-items:center;justify-content:center;flex-shrink:0;box-shadow:0 2px 8px ${color}33">
+            <span style="font-size:13px;font-weight:800;color:${color}">${pct != null ? pct+'%' : 'N/A'}</span>
+          </div>
+          <div style="flex:1">
+            <div style="font-size:15px;font-weight:800;color:${color};margin-bottom:4px">${label}</div>
+            <div style="font-size:11px;color:#6b7280">${pct != null ? 'Based on claim data & AI image analysis' : 'Fraud score has not been calculated for this claim.'}</div>
+          </div>
+        </div>
+        ${pct != null ? `
+        <div style="width:100%;height:10px;background:#e5e7eb;border-radius:99px;overflow:hidden;margin-bottom:12px">
+          <div style="width:${pct}%;height:100%;background:${color};border-radius:99px;transition:width 0.6s ease"></div>
+        </div>
+        <div style="font-size:11px;font-weight:700;color:${color};text-transform:uppercase;letter-spacing:0.4px;margin-bottom:6px">Why this score?</div>
+        <ul class="fraud-factors">
+          ${factors.map(f => `<li><span>${f.icon}</span><span>${f.text}</span></li>`).join('')}
+        </ul>` : ''}
+      </div>`;
+  }
+
+  function renderAdjCharts(claims) {
+    // ── Doughnut: claims by status ──────────────────────────────
+    const statusData = [
+      { label: 'Submitted',  count: claims.filter(c=>c.status==='SUBMITTED').length,    color: '#3b82f6' },
+      { label: 'In Review',  count: claims.filter(c=>c.status==='UNDER_REVIEW').length, color: '#f59e0b' },
+      { label: 'Approved',   count: claims.filter(c=>c.status==='APPROVED').length,     color: '#16a34a' },
+      { label: 'Declined',   count: claims.filter(c=>c.status==='DECLINED').length,     color: '#ef4444' },
+      { label: 'Settled',    count: claims.filter(c=>c.status==='SETTLED').length,      color: '#8b5cf6' },
+    ].filter(d => d.count > 0);
+
+    const doughnutCanvas = document.getElementById('adj-doughnut');
+    if (doughnutCanvas) {
+      if (statusData.length === 0) {
+        doughnutCanvas.parentElement.innerHTML = '<div style="text-align:center;padding:20px;color:var(--gray-400);font-size:13px">No claims yet</div>';
+      } else {
+        const total = statusData.reduce((s,d) => s+d.count, 0);
+        new Chart(doughnutCanvas, {
+          type: 'doughnut',
+          data: {
+            labels: statusData.map(d=>d.label),
+            datasets: [{
+              data: statusData.map(d=>d.count),
+              backgroundColor: statusData.map(d=>d.color),
+              borderWidth: 2, borderColor: '#fff', hoverOffset: 5,
+            }]
+          },
+          options: {
+            responsive: true, maintainAspectRatio: false, cutout: '65%',
+            plugins: {
+              legend: { display: false },
+              tooltip: { callbacks: { label: ctx => ` ${ctx.label}: ${ctx.raw} (${Math.round(ctx.raw/total*100)}%)` } }
+            }
+          }
+        });
+        document.getElementById('adj-doughnut-legend').innerHTML = statusData.map(d => `
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:7px">
+            <div style="width:10px;height:10px;border-radius:50%;background:${d.color};flex-shrink:0"></div>
+            <span style="font-size:12px;color:var(--gray-600);flex:1">${d.label}</span>
+            <span style="font-size:12px;font-weight:700;color:var(--gray-800)">${d.count}</span>
+          </div>
+        `).join('');
+      }
+    }
+
+    // ── Bar: claims by incident type ────────────────────────────
+    const typeMap = {};
+    claims.forEach(c => {
+      const t = (c.incident_type||'OTHER').replace(/_/g,' ');
+      typeMap[t] = (typeMap[t]||0) + 1;
+    });
+    const typeLabels = Object.keys(typeMap);
+    const typeCounts = typeLabels.map(l => typeMap[l]);
+    const barColors  = ['#1a7a4a','#3b82f6','#f59e0b','#ef4444','#8b5cf6','#06b6d4','#ec4899'];
+
+    const barCanvas = document.getElementById('adj-bar');
+    if (barCanvas && typeLabels.length > 0) {
+      new Chart(barCanvas, {
+        type: 'bar',
+        data: {
+          labels: typeLabels,
+          datasets: [{
+            label: 'Claims',
+            data: typeCounts,
+            backgroundColor: typeLabels.map((_,i) => barColors[i % barColors.length]),
+            borderRadius: 6,
+            borderSkipped: false,
+          }]
+        },
+        options: {
+          responsive: true, maintainAspectRatio: false,
+          plugins: { legend: { display: false } },
+          scales: {
+            y: {
+              beginAtZero: true, ticks: { stepSize: 1, font: { size: 11 } },
+              grid: { color: '#f3f4f6' }
+            },
+            x: { ticks: { font: { size: 11 } }, grid: { display: false } }
+          }
+        }
+      });
+    } else if (barCanvas) {
+      barCanvas.parentElement.innerHTML = '<div style="text-align:center;padding:20px;color:var(--gray-400);font-size:13px">No claims yet</div>';
     }
   }
 

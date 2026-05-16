@@ -54,9 +54,17 @@ function authHeaders() {
 }
 
 async function apiFetch(url, options = {}) {
+  // If body is FormData, do NOT set Content-Type — the browser must set it
+  // automatically so it includes the correct multipart boundary.
+  // Forcing Content-Type: application/json corrupts file uploads.
+  const isFormData = options.body instanceof FormData;
+  const headers = isFormData
+    ? { 'Authorization': `Bearer ${getToken()}`, ...(options.headers || {}) }
+    : { ...authHeaders(), ...(options.headers || {}) };
+
   const res = await fetch(`${API}${url}`, {
     ...options,
-    headers: { ...authHeaders(), ...(options.headers || {}) }
+    headers,
   });
   if (res.status === 401) { logout(); return null; }
   return res;

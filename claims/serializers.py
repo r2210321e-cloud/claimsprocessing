@@ -442,7 +442,7 @@ class ClaimDocumentUploadSerializer(serializers.ModelSerializer):
             'id', 'claim', 'document_type', 'file',
             'description',
         ]
-        read_only_fields = ['id']
+        read_only_fields = ['id', 'claim']
 
     def validate_file(self, value):
         max_size = 10 * 1024 * 1024  # 10 MB
@@ -623,6 +623,7 @@ class ClaimSubmitSerializer(serializers.ModelSerializer):
     class Meta:
         model  = Claim
         fields = [
+            'id', 'claim_number',
             'policy', 'vehicle',
             'incident_type', 'incident_date', 'incident_time',
             'incident_location', 'incident_description',
@@ -632,6 +633,7 @@ class ClaimSubmitSerializer(serializers.ModelSerializer):
             'third_party_license_plate', 'third_party_insurer',
             'claimed_amount',
         ]
+        read_only_fields = ['id', 'claim_number']
 
     # ── Field-level validators ────────────────────────────────────────────────
 

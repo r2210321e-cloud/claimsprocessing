@@ -65,7 +65,10 @@
   .policy-card .pc-details { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
   .policy-card .pc-item { font-size: 12px; }
   .policy-card .pc-item span { color: var(--gray-400); display: block; font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px; }
+
+  .chart-container { position: relative; height: 200px; }
 </style>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 </head>
 <body>
 
@@ -208,7 +211,10 @@
           <div class="card">
             <div class="card-header"><div class="card-title">Claims Breakdown</div></div>
             <div class="card-body">
-              <div class="chart-bar-wrap" id="chart-bars"></div>
+              <div class="chart-container">
+                <canvas id="claims-doughnut"></canvas>
+              </div>
+              <div id="chart-legend" style="margin-top:12px"></div>
             </div>
           </div>
 
@@ -237,24 +243,57 @@
       </div>
     `;
 
-    // Render chart bars
+    // Render doughnut chart
     const chartData = [
-      { label: 'Submitted', count: claims.filter(c=>c.status==='SUBMITTED').length, color: '#3b82f6' },
-      { label: 'In Review', count: claims.filter(c=>c.status==='UNDER_REVIEW').length, color: '#f5c518' },
-      { label: 'Approved',  count: claims.filter(c=>c.status==='APPROVED').length,  color: '#1a7a4a' },
-      { label: 'Declined',  count: claims.filter(c=>c.status==='DECLINED').length,  color: '#ef4444' },
-      { label: 'Settled',   count: claims.filter(c=>c.status==='SETTLED').length,   color: '#0a4a2f' },
-    ];
-    const maxVal = Math.max(...chartData.map(d=>d.count), 1);
-    document.getElementById('chart-bars').innerHTML = chartData.map(d => `
-      <div class="chart-bar-item">
-        <div class="chart-bar-label">${d.label}</div>
-        <div class="chart-bar-track">
-          <div class="chart-bar-fill" style="width:${(d.count/maxVal)*100}%;background:${d.color}"></div>
+      { label: 'Submitted',   count: claims.filter(c=>c.status==='SUBMITTED').length,    color: '#3b82f6' },
+      { label: 'In Review',   count: claims.filter(c=>c.status==='UNDER_REVIEW').length, color: '#f59e0b' },
+      { label: 'Approved',    count: claims.filter(c=>c.status==='APPROVED').length,     color: '#1a7a4a' },
+      { label: 'Declined',    count: claims.filter(c=>c.status==='DECLINED').length,     color: '#ef4444' },
+      { label: 'Settled',     count: claims.filter(c=>c.status==='SETTLED').length,      color: '#8b5cf6' },
+    ].filter(d => d.count > 0);
+
+    const total = chartData.reduce((s, d) => s + d.count, 0);
+
+    if (total === 0) {
+      document.getElementById('claims-doughnut').parentElement.innerHTML =
+        '<div style="text-align:center;padding:32px;color:var(--gray-400);font-size:13px">No claims yet</div>';
+    } else {
+      new Chart(document.getElementById('claims-doughnut'), {
+        type: 'doughnut',
+        data: {
+          labels: chartData.map(d => d.label),
+          datasets: [{
+            data: chartData.map(d => d.count),
+            backgroundColor: chartData.map(d => d.color),
+            borderWidth: 2,
+            borderColor: '#fff',
+            hoverOffset: 6,
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          cutout: '68%',
+          plugins: {
+            legend: { display: false },
+            tooltip: {
+              callbacks: {
+                label: ctx => ` ${ctx.label}: ${ctx.raw} (${Math.round(ctx.raw/total*100)}%)`
+              }
+            }
+          }
+        }
+      });
+
+      // Custom legend
+      document.getElementById('chart-legend').innerHTML = chartData.map(d => `
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+          <div style="width:10px;height:10px;border-radius:50%;background:${d.color};flex-shrink:0"></div>
+          <span style="font-size:12px;color:var(--gray-600);flex:1">${d.label}</span>
+          <span style="font-size:12px;font-weight:700;color:var(--gray-800)">${d.count}</span>
         </div>
-        <div class="chart-bar-val">${d.count}</div>
-      </div>
-    `).join('');
+      `).join('');
+    }
   }
 
   loadDashboard();

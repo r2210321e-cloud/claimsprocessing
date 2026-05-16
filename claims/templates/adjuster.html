@@ -98,6 +98,37 @@
   .tab-btn.active { background: white; color: var(--green-dark); font-weight: 600; box-shadow: var(--shadow-sm); }
 
   @keyframes fadeIn { from{opacity:0;transform:translateY(4px)} to{opacity:1;transform:translateY(0)} }
+
+  /* Image gallery */
+  .img-gallery { display:grid; grid-template-columns:repeat(2,1fr); gap:8px; margin-top:8px; }
+  .img-thumb {
+    width:100%; aspect-ratio:4/3; object-fit:cover;
+    border-radius:8px; cursor:pointer; border:2px solid transparent;
+    transition:all 0.2s;
+  }
+  .img-thumb:hover { border-color:var(--green-main); transform:scale(1.02); }
+  .img-no-photo { font-size:12px; color:var(--gray-400); background:var(--gray-50); border-radius:8px; padding:14px; text-align:center; }
+
+  /* Lightbox */
+  .lightbox {
+    display:none; position:fixed; inset:0; z-index:1100;
+    background:rgba(0,0,0,0.88); align-items:center; justify-content:center;
+    padding:24px;
+  }
+  .lightbox.open { display:flex; flex-direction:column; }
+  .lightbox img { max-width:100%; max-height:80vh; border-radius:12px; object-fit:contain; }
+  .lightbox-caption { color:white; font-size:13px; margin-top:10px; opacity:0.7; }
+  .lightbox-close { position:absolute; top:18px; right:22px; color:white; font-size:28px; cursor:pointer; background:none; border:none; }
+
+  /* Fraud explanation bullets */
+  .fraud-factors { list-style:none; padding:0; margin:8px 0 0; }
+  .fraud-factors li {
+    font-size:12px; padding:5px 0;
+    border-bottom:1px solid var(--gray-100);
+    display:flex; gap:8px; align-items:flex-start; color:var(--gray-700);
+  }
+  .fraud-factors li:last-child { border-bottom:none; }
+  .fraud-factors li .ff-icon { flex-shrink:0; }
 </style>
 </head>
 <body>
@@ -140,6 +171,13 @@
     </div>
 
   </div>
+</div>
+
+<!-- Lightbox -->
+<div class="lightbox" id="lightbox" onclick="closeLightbox()">
+  <button class="lightbox-close" onclick="closeLightbox()">✕</button>
+  <img id="lightbox-img" src="" alt="Claim photo"/>
+  <div class="lightbox-caption" id="lightbox-caption"></div>
 </div>
 
 <script src="{% static 'shared.js' %}"></script>
@@ -206,11 +244,25 @@
     panel.innerHTML = '<div style="padding:48px;text-align:center;color:var(--gray-400)">⏳ Loading…</div>';
 
     try {
-      const res = await apiFetch(`/claims/${id}/`);
-      if (!res) return;
-      selectedClaim = await res.json();
+      const [claimRes, docsRes] = await Promise.all([
+        apiFetch(`/claims/${id}/`),
+        apiFetch(`/claims/${id}/documents/`),
+      ]);
+      if (!claimRes) return;
+      selectedClaim = await claimRes.json();
+
+      // Merge documents from both the nested claim response AND the dedicated endpoint
+      // so photos and police reports always reach the adjuster
+      if (docsRes && docsRes.ok) {
+        const docsData = await docsRes.json();
+        const extraDocs = docsData.results || docsData;
+        if (!Array.isArray(selectedClaim.documents)) selectedClaim.documents = [];
+        const existingIds = new Set(selectedClaim.documents.map(d => d.id));
+        extraDocs.forEach(d => { if (!existingIds.has(d.id)) selectedClaim.documents.push(d); });
+      }
+
       renderDetailPanel(selectedClaim);
-    } catch(e) {}
+    } catch(e) { console.error('selectClaim error:', e); }
   }
 
   function renderDetailPanel(c) {
@@ -250,17 +302,17 @@
         </div>
 
         <!-- AI -->
-        ${c.ai_damage_summary || c.ai_estimated_repair || c.ai_fraud_score != null ? `
+        ${buildFraudExplanation(c)}
+        ${c.ai_damage_summary || c.ai_estimated_repair ? `
         <div class="dp-section">
-          <div class="dp-section-title">AI Assessment</div>
-          <div class="fraud-indicator ${fraudClass}" style="margin-bottom:10px">
-            🤖 Fraud Risk: ${fraudLabel}
-            ${fraudScore != null ? `<span style="margin-left:auto;font-size:11px;opacity:0.8">${(fraudScore*100).toFixed(0)}%</span>` : ''}
-          </div>
+          <div class="dp-section-title">🤖 AI Damage Assessment</div>
           ${c.ai_estimated_repair ? `<div class="dp-row"><div class="dp-key">AI Repair Estimate</div><div class="dp-val" style="color:var(--green-main)">${formatCurrency(c.ai_estimated_repair)}</div></div>` : ''}
           ${c.ai_damage_summary ? `<div style="font-size:12px;color:var(--gray-600);background:var(--gray-50);padding:10px;border-radius:8px;margin-top:8px;line-height:1.5">${c.ai_damage_summary}</div>` : ''}
         </div>
         ` : ''}
+
+        <!-- IMAGES — under AI Assessment so adjuster sees the photo being analysed -->
+        ${buildImageGallery(c)}
 
         <!-- DOCUMENTS -->
         <div class="dp-section">
@@ -369,6 +421,157 @@
   }
 
   loadAdjClaims();
+
+  function openLightbox(src, caption) {
+    document.getElementById('lightbox-img').src = src;
+    document.getElementById('lightbox-caption').textContent = caption || '';
+    document.getElementById('lightbox').classList.add('open');
+  }
+  function closeLightbox() {
+    document.getElementById('lightbox').classList.remove('open');
+  }
+
+  function buildFraudExplanation(c) {
+    const score = c.ai_fraud_score;
+    if (score == null) return '';
+    const factors = [];
+    const s = c.ai_fraud_factors || c.fraud_factors || {};
+
+    // Derive signals from available data
+    if (c.police_report_filed === false)
+      factors.push({ icon: '⚠️', text: 'No police report filed for the incident' });
+    if (c.injuries_reported && !c.police_report_filed)
+      factors.push({ icon: '⚠️', text: 'Injuries reported but no police report' });
+    if (c.claimed_amount && c.policy_info?.sum_insured && c.claimed_amount / c.policy_info.sum_insured > 0.8)
+      factors.push({ icon: '🔴', text: 'Claimed amount is over 80% of sum insured' });
+    if (c.processing_days != null && c.processing_days > 30)
+      factors.push({ icon: '⚠️', text: `Claim submitted ${c.processing_days} days after the incident` });
+    if (s.prior_claims > 2)
+      factors.push({ icon: '🔴', text: `${s.prior_claims} prior claims on this policy` });
+    if (s.inconsistent_damage)
+      factors.push({ icon: '🔴', text: 'AI detected damage inconsistent with reported incident type' });
+    if (s.image_manipulation)
+      factors.push({ icon: '🔴', text: 'Possible image manipulation detected in submitted photos' });
+    if (s.staged_indicators)
+      factors.push({ icon: '⚠️', text: 'Pattern of damage may suggest a staged accident' });
+    if (c.fault_type === 'NOT_AT_FAULT' && score > 0.5)
+      factors.push({ icon: '⚠️', text: 'Not-at-fault claims with no third-party corroboration' });
+    if (c.ai_damage_summary && /multiple|extensive|total/i.test(c.ai_damage_summary) && score > 0.5)
+      factors.push({ icon: '⚠️', text: 'AI assessment indicates extensive/multiple damage areas' });
+
+    // Always add at least a positive signal if low risk
+    if (score < 0.3) {
+      factors.push({ icon: '✅', text: 'Incident details consistent with reported damage' });
+      factors.push({ icon: '✅', text: 'No anomalies detected in submitted documentation' });
+    }
+    if (!factors.length) {
+      factors.push({ icon: '🟡', text: 'Some claim details could not be fully verified automatically' });
+      factors.push({ icon: '🟡', text: 'Manual review recommended before making a decision' });
+    }
+
+    const pct = Math.round(score * 100);
+    const color = score < 0.3 ? '#16a34a' : score < 0.7 ? '#d97706' : '#dc2626';
+    const bg    = score < 0.3 ? '#f0fdf4'  : score < 0.7 ? '#fffbeb'  : '#fef2f2';
+
+    return `
+      <div class="dp-section">
+        <div class="dp-section-title">🛡️ Fraud Risk Analysis</div>
+        <div style="background:${bg};border:1.5px solid ${color}44;border-radius:10px;padding:12px;margin-bottom:4px">
+          <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
+            <div style="width:48px;height:48px;border-radius:50%;border:3px solid ${color};background:white;display:flex;align-items:center;justify-content:center;flex-shrink:0">
+              <span style="font-size:13px;font-weight:800;color:${color}">${pct}%</span>
+            </div>
+            <div>
+              <div style="font-weight:700;color:${color};font-size:14px">${score < 0.3 ? '🟢 Low Risk' : score < 0.7 ? '🟡 Medium Risk' : '🔴 High Risk'}</div>
+              <div style="font-size:11px;color:#6b7280;margin-top:2px">Based on claim data &amp; AI image analysis</div>
+            </div>
+            <div style="margin-left:auto;width:80px">
+              <div style="height:8px;background:#e5e7eb;border-radius:99px;overflow:hidden">
+                <div style="width:${pct}%;height:100%;background:${color};border-radius:99px"></div>
+              </div>
+              <div style="text-align:right;font-size:10px;color:${color};margin-top:2px;font-weight:700">${pct}/100</div>
+            </div>
+          </div>
+          <div style="font-size:11px;font-weight:700;color:${color};text-transform:uppercase;letter-spacing:0.4px;margin-bottom:6px">Contributing Factors</div>
+          <ul class="fraud-factors">
+            ${factors.map(f => `<li><span class="ff-icon">${f.icon}</span><span>${f.text}</span></li>`).join('')}
+          </ul>
+        </div>
+      </div>`;
+  }
+
+  function buildImageGallery(c) {
+    const allDocs = c.documents || [];
+
+    // Photos — images submitted with the claim
+    const photos = allDocs.filter(d => {
+      const t = (d.document_type || '').toUpperCase();
+      const url = d.file_url || d.url || '';
+      return t.includes('PHOTO') || t.includes('IMAGE') || t.includes('DAMAGE') ||
+             /\.(jpg|jpeg|png|webp|gif)/i.test(url);
+    });
+
+    // Police report — document or the claim's own police_report_file field
+    const policeDocs = allDocs.filter(d => {
+      const t = (d.document_type || '').toUpperCase();
+      return t.includes('POLICE') || t.includes('REPORT');
+    });
+    const policeFileUrl = c.police_report_file || c.police_report_url || null;
+
+    const photoHtml = photos.length
+      ? `<div class="dp-section-title">📷 Claim Photos (${photos.length}) — Click to enlarge</div>
+         <div class="img-gallery">
+           ${photos.map((d,i) => {
+             const src = d.file_url || d.url || '';
+             const cap = (d.document_type||'Claim Photo').replace(/_/g,' ') + ' — Photo ' + (i+1);
+             return `<img class="img-thumb" src="${src}" alt="Claim photo ${i+1}"
+               onclick="openLightbox('${src}','${cap}')"
+               onerror="this.style.display='none'"
+             />`;
+           }).join('')}
+         </div>`
+      : `<div class="dp-section-title">📷 Claim Photos</div>
+         <div class="img-no-photo">📷 No photos submitted with this claim</div>`;
+
+    // Build police report block
+    let policeHtml = '';
+    if (policeDocs.length || policeFileUrl) {
+      const allPolice = [...policeDocs];
+      if (policeFileUrl && !policeDocs.some(d => (d.file_url||d.url) === policeFileUrl))
+        allPolice.push({ document_type: 'POLICE_REPORT', file_url: policeFileUrl });
+
+      policeHtml = `
+        <div style="margin-top:14px;padding-top:14px;border-top:1px solid var(--gray-100)">
+          <div class="dp-section-title" style="margin-bottom:8px">🚔 Police Report</div>
+          ${allPolice.map(d => {
+            const url = d.file_url || d.url || '#';
+            const isPdf = /\.pdf/i.test(url);
+            const isImg = /\.(jpg|jpeg|png|webp)/i.test(url);
+            return `<a href="${url}" target="_blank"
+              style="display:flex;align-items:center;gap:10px;padding:10px 12px;background:var(--gray-50);border:1px solid var(--gray-200);border-radius:8px;text-decoration:none;color:var(--gray-800);font-size:12px;font-weight:600;margin-bottom:6px;transition:all 0.2s"
+              onmouseover="this.style.borderColor='var(--green-main)';this.style.background='var(--green-pale)'"
+              onmouseout="this.style.borderColor='var(--gray-200)';this.style.background='var(--gray-50)'">
+              <span style="font-size:18px">${isPdf ? '📄' : isImg ? '🖼️' : '📎'}</span>
+              <div>
+                <div>${(d.document_type||'Police Report').replace(/_/g,' ')}</div>
+                <div style="font-size:10px;color:var(--gray-400);margin-top:1px">Click to view · opens in new tab</div>
+              </div>
+              <span style="margin-left:auto;font-size:10px;color:var(--green-main);font-weight:700">VIEW →</span>
+            </a>`;
+          }).join('')}
+        </div>`;
+    } else if (c.police_report_filed) {
+      policeHtml = `
+        <div style="margin-top:14px;padding-top:14px;border-top:1px solid var(--gray-100)">
+          <div class="dp-section-title" style="margin-bottom:8px">🚔 Police Report</div>
+          <div style="font-size:12px;color:var(--gray-400);background:var(--gray-50);border-radius:8px;padding:10px">
+            Police report filed (Ref: ${c.police_report_number||'—'}) — document not yet uploaded
+          </div>
+        </div>`;
+    }
+
+    return `<div class="dp-section">${photoHtml}${policeHtml}</div>`;
+  }
 </script>
 </body>
 </html>

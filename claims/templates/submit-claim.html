@@ -968,20 +968,30 @@
       if (!res) return;
       const data = await res.json();
       if (res.ok) {
-        const claimId = data.id;
+        const claimId = data.id || data.claim_id || data.uuid || data.pk;
+        console.log('[Claim Created] Full response:', JSON.stringify(data));
 
         // 1. Upload documents
+        let uploadErrors = 0;
         for (const [type, files] of Object.entries(uploadedFiles)) {
           for (const file of files) {
             const fd = new FormData();
             fd.append('file', file);
             fd.append('document_type', type);
-            await fetch(API + '/claims/' + claimId + '/documents/upload/', {
+            // apiFetch is now safe for FormData — won't force Content-Type: application/json
+            const uploadRes = await apiFetch('/claims/' + claimId + '/documents/upload/', {
               method: 'POST',
-              headers: { 'Authorization': 'Bearer ' + getToken() },
-              body: fd
+              body: fd,
             });
+            if (!uploadRes || !uploadRes.ok) {
+              uploadErrors++;
+              const errText = uploadRes ? await uploadRes.text() : 'no response';
+              console.error('[DocUpload] Failed:', type, file.name, errText);
+            }
           }
+        }
+        if (uploadErrors > 0) {
+          showToast(uploadErrors + ' document(s) failed to upload. Please re-upload from your claim page.', 'error');
         }
 
         // 2. Save AI assessment to backend if we have a result
