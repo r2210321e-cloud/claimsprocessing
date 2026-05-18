@@ -56,6 +56,16 @@ def _hash_parts(parts):
     raw = json.dumps(parts, sort_keys=True)
     return hashlib.sha256(raw.encode()).hexdigest()
 
+def _image_only_cache_key(image_parts: list) -> str:
+    """
+    Generates a cache key based ONLY on the image data (no prompt, no claim text).
+    This allows run_ai_assessment to find the result from analyze_images.
+    """
+    raw = json.dumps(image_parts, sort_keys=True)
+    digest = hashlib.sha256(raw.encode()).hexdigest()
+    return f"ai:images_only:{digest}"
+
+
 def analyze_images(images: list) -> dict:
     """
     Used by AIAssessmentProxyView (pre-claim submission).
@@ -67,7 +77,7 @@ def analyze_images(images: list) -> dict:
     if not api_key:
         raise Exception("GEMINI_API_KEY not set")
 
-    parts = []
+    image_parts = []
 
     # Limit to 3 images (same as claim flow)
     for img in images[:3]:
@@ -81,7 +91,7 @@ def analyze_images(images: list) -> dict:
             # Validate base64
             base64.b64decode(data)
 
-            parts.append({
+            image_parts.append({
                 "inline_data": {
                     "mime_type": src.get("media_type", "image/jpeg"),
                     "data": data,
@@ -91,20 +101,20 @@ def analyze_images(images: list) -> dict:
         except Exception:
             continue
 
-    if not parts:
+    if not image_parts:
         raise ValueError("No valid images provided")
 
-    # Add prompt LAST (important for Gemini)
-    parts.append({"text": PROMPT})
-
     # -------------------------
-    # CACHE (reuse logic)
+    # CACHE — check image-only key first
     # -------------------------
-    cache_key = f"ai:images:{_hash_parts(parts)}"
+    cache_key = _image_only_cache_key(image_parts)
     cached = cache.get(cache_key)
 
     if cached:
         return cached
+
+    # Add prompt LAST (important for Gemini)
+    parts = image_parts + [{"text": PROMPT}]
 
     # -------------------------
     # CALL GEMINI
@@ -112,9 +122,7 @@ def analyze_images(images: list) -> dict:
     raw_text = _call_gemini(api_key, parts)
     raw_text = raw_text.replace("```json", "").replace("```", "").strip()
 
-    # 🔥 Extract first valid JSON object
     import re
-
     match = re.search(r'\{.*\}', raw_text, re.DOTALL)
 
     if not match:
@@ -128,7 +136,8 @@ def analyze_images(images: list) -> dict:
         logger.error(f"Bad AI JSON: {raw_text}")
         raise ValueError("AI returned invalid JSON")
 
-    cache.set(cache_key, data, timeout=300)
+    # Store with a 30-minute timeout so it's still available when the claim is submitted
+    cache.set(cache_key, data, timeout=1800)
 
     return data
 # -------------------------
@@ -147,10 +156,8 @@ def run_ai_assessment(claim) -> bool:
             logger.error("GEMINI_API_KEY not set")
             return False
 
-        parts = [{"text": _build_text_context(claim) + "\n\n" + PROMPT}]
-
-        # ✅ Limit images to 3 (important)
-        images_added = 0
+        # ✅ Encode images first (limit to 3)
+        image_parts = []
         damage_docs = claim.documents.filter(
             document_type__in=["ACCIDENT_PHOTO", "VEHICLE_PHOTO"]
         ).order_by("-created_at")[:3]
@@ -158,25 +165,32 @@ def run_ai_assessment(claim) -> bool:
         for doc in damage_docs:
             img_part = _encode_image(doc)
             if img_part:
-                parts.append(img_part)
-                images_added += 1
-
-        if images_added == 0:
-            parts[0]["text"] += "\n\nNo damage photos provided."
+                image_parts.append(img_part)
 
         # -------------------------
-        # CACHE
+        # CACHE — reuse analyze_images result if available
+        # If the user previewed the assessment before submitting,
+        # the result is already cached under the image-only key.
+        # Reuse it to keep the estimate consistent.
         # -------------------------
-        cache_key = f"ai:{_hash_parts(parts)}"
-        cached = cache.get(cache_key)
+        data = None
+        if image_parts:
+            preview_cache_key = _image_only_cache_key(image_parts)
+            data = cache.get(preview_cache_key)
+            if data:
+                logger.info(f"Reusing pre-submission AI result for {claim.claim_number}")
 
-        if cached:
-            data = cached
-        else:
+        if not data:
+            # No cached preview found — call Gemini fresh
+            parts = [{"text": _build_text_context(claim) + "\n\n" + PROMPT}]
+            parts.extend(image_parts)
+
+            if not image_parts:
+                parts[0]["text"] += "\n\nNo damage photos provided."
+
             raw_text = _call_gemini(api_key, parts)
             raw_text = raw_text.replace("```json", "").replace("```", "").strip()
             data = json.loads(raw_text)
-            cache.set(cache_key, data, timeout=300)
 
         # -------------------------
         # PROCESS RESPONSE

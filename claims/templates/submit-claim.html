@@ -531,20 +531,73 @@
     document.getElementById('ai-loading').style.display = 'none';
     document.getElementById('ai-result').style.display = 'block';
     document.getElementById('ai-timestamp').textContent = 'Assessed on ' + new Date().toLocaleString();
+
+    const damages   = result.damages || [];
+    const totalCost = result.total_cost_usd || 0;
+
+    // ── No vehicle damage detected — warn the client ──────────────────────
+    if (damages.length === 0 || totalCost === 0) {
+      aiAssessmentResult = null; // block submission until photos are fixed
+
+      document.getElementById('ai-result').style.display = 'none';
+
+      // Show a clear warning banner
+      let warningEl = document.getElementById('ai-invalid-photo-warning');
+      if (!warningEl) {
+        warningEl = document.createElement('div');
+        warningEl.id = 'ai-invalid-photo-warning';
+        document.getElementById('ai-result').parentElement.appendChild(warningEl);
+      }
+      warningEl.innerHTML = `
+        <div style="background:#fef2f2;border:2px solid #ef4444;border-radius:12px;padding:20px;text-align:center;margin-bottom:16px">
+          <div style="font-size:36px;margin-bottom:10px">⚠️</div>
+          <div style="font-size:15px;font-weight:700;color:#dc2626;margin-bottom:8px">
+            No Vehicle Damage Detected
+          </div>
+          <div style="font-size:13px;color:#7f1d1d;margin-bottom:16px;line-height:1.6">
+            Our AI could not detect any vehicle damage in the photos you uploaded.<br/>
+            This may be because the image does not show a damaged vehicle, the photo is unclear, or the damage is not visible.
+          </div>
+          <div style="font-size:13px;font-weight:600;color:#dc2626;margin-bottom:16px">
+            Please go back and upload clear photos of the damaged vehicle before submitting.
+          </div>
+          <button class="btn btn-outline" onclick="goStep(3)" style="border-color:#ef4444;color:#dc2626">
+            ← Go Back & Upload Correct Photos
+          </button>
+        </div>
+      `;
+      warningEl.style.display = 'block';
+
+      // Disable the submit button
+      const submitBtn = document.getElementById('submit-btn');
+      if (submitBtn) {
+        submitBtn.disabled = true;
+        submitBtn.style.opacity = '0.4';
+        submitBtn.title = 'Please upload valid vehicle damage photos first';
+      }
+      return;
+    }
+
+    // ── Valid result — clear any previous warning and enable submit ───────
+    const warningEl = document.getElementById('ai-invalid-photo-warning');
+    if (warningEl) warningEl.style.display = 'none';
+    const submitBtn = document.getElementById('submit-btn');
+    if (submitBtn) { submitBtn.disabled = false; submitBtn.style.opacity = '1'; submitBtn.title = ''; }
+
     const sc = { 'Minor': '#22c55e', 'Moderate': '#f59e0b', 'Severe': '#ef4444' };
-    document.getElementById('ai-damage-list').innerHTML = (result.damages || []).map(d =>
+    document.getElementById('ai-damage-list').innerHTML = damages.map(d =>
       '<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--green-border)">' +
       '<span style="width:8px;height:8px;border-radius:50%;background:' + (sc[d.severity]||'#aaa') + ';flex-shrink:0"></span>' +
       '<div style="flex:1"><span style="font-size:13px;font-weight:600;color:var(--gray-800)">' + d.part + '</span>' +
       '<span style="font-size:11px;color:' + (sc[d.severity]||'#aaa') + ';font-weight:600;margin-left:8px;background:' + (sc[d.severity]||'#aaa') + '22;padding:2px 8px;border-radius:10px">' + d.severity + '</span>' +
       '<div style="font-size:12px;color:var(--gray-400);margin-top:2px">' + d.description + '</div></div></div>'
     ).join('');
-    document.getElementById('ai-cost-breakdown').innerHTML = (result.damages || []).map(d =>
+    document.getElementById('ai-cost-breakdown').innerHTML = damages.map(d =>
       '<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--green-border);font-size:13px">' +
       '<span style="color:var(--gray-600)">' + d.part + '</span>' +
       '<span style="font-weight:600;color:var(--gray-800)">USD ' + (d.cost_usd||0).toLocaleString() + '</span></div>'
     ).join('');
-    document.getElementById('ai-total-cost').textContent = 'USD ' + (result.total_cost_usd||0).toLocaleString();
+    document.getElementById('ai-total-cost').textContent = 'USD ' + totalCost.toLocaleString();
   }
 
   // ─────────────────────────────────────────────────────────────────
@@ -963,6 +1016,16 @@
       third_party_insurer:  document.getElementById('tp_insurer').value,
     };
 
+    // If the client already saw an AI assessment on Step 4, send it with the
+    // claim so the backend saves it directly and does NOT call Gemini again.
+    // This ensures the cost and description shown to the adjuster matches
+    // exactly what the client saw before submitting.
+    if (aiAssessmentResult) {
+      payload.ai_damage_summary   = aiAssessmentResult.damage_description || aiAssessmentResult.summary || '';
+      payload.ai_estimated_repair = aiAssessmentResult.total_estimate_usd || aiAssessmentResult.total_cost_usd || 0;
+      payload.ai_fraud_score      = aiAssessmentResult.fraud_score || 0;
+    }
+
     try {
       const res = await apiFetch('/claims/', { method: 'POST', body: JSON.stringify(payload) });
       if (!res) return;
@@ -994,31 +1057,8 @@
           showToast(uploadErrors + ' document(s) failed to upload. Please re-upload from your claim page.', 'error');
         }
 
-        // 2. Save AI assessment to backend if we have a result
-        if (aiAssessmentResult) {
-          const r = aiAssessmentResult;
-          const overallSeverity = (r.damages || []).reduce((worst, d) => {
-            const order = { 'Minor': 1, 'Moderate': 2, 'Severe': 3 };
-            return (order[d.severity] || 0) > (order[worst] || 0) ? d.severity : worst;
-          }, 'Minor');
-          const severityMap = { 'Minor': 'MINOR', 'Moderate': 'MODERATE', 'Severe': 'SEVERE' };
-
-          await apiFetch('/claims/' + claimId + '/assessments/', {
-            method: 'POST',
-            body: JSON.stringify({
-              assessment_type:    'AI_INITIAL',
-              damage_description: r.summary || 'AI damage assessment',
-              damage_severity:    severityMap[overallSeverity] || 'MINOR',
-              damaged_parts:      r.damages || [],
-              parts_cost:         r.total_cost_usd || 0,
-              labour_cost:        0,
-              paint_cost:         0,
-              other_costs:        0,
-              total_estimate:     r.total_cost_usd || 0,
-              notes:              'Auto-generated by Claude AI on submission.',
-            })
-          });
-        }
+        // 2. AI assessment is saved by the backend from the submitted payload.
+        // No separate POST needed.
 
         showToast('Claim ' + data.claim_number + ' submitted successfully!');
         setTimeout(() => window.location.href = '/track-claim/', 1500);

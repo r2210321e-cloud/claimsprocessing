@@ -620,6 +620,12 @@ class ClaimDetailSerializer(serializers.ModelSerializer):
 class ClaimSubmitSerializer(serializers.ModelSerializer):
     """Used by client to submit a new claim — full validation applied."""
 
+    # Optional: client sends the AI result from the preview step so the
+    # backend can save it directly without calling Gemini a second time.
+    ai_damage_summary   = serializers.CharField(required=False, allow_blank=True)
+    ai_estimated_repair = serializers.DecimalField(max_digits=12, decimal_places=2, required=False, allow_null=True)
+    ai_fraud_score      = serializers.FloatField(required=False, allow_null=True)
+
     class Meta:
         model  = Claim
         fields = [
@@ -632,6 +638,7 @@ class ClaimSubmitSerializer(serializers.ModelSerializer):
             'third_party_involved', 'third_party_name', 'third_party_phone',
             'third_party_license_plate', 'third_party_insurer',
             'claimed_amount',
+            'ai_damage_summary', 'ai_estimated_repair', 'ai_fraud_score',
         ]
         read_only_fields = ['id', 'claim_number']
 
